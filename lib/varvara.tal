@@ -56,7 +56,7 @@
     &volume     $1 
     &pitch      $1
 
-|30 @audio1
+|40 @audio1
     &vector     $2 
     &position   $2 
     &output     $1 
@@ -67,7 +67,7 @@
     &volume     $1 
     &pitch      $1
 
-|30 @audio2
+|50 @audio2
     &vector     $2 
     &position   $2 
     &output     $1 
@@ -78,7 +78,7 @@
     &volume     $1 
     &pitch      $1
 
-|30 @audio3
+|60 @audio3
     &vector     $2 
     &position   $2 
     &output     $1 
