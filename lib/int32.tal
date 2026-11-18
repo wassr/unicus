@@ -1,0 +1,188 @@
+( Copyright 2026 Noel Atzwanger (@wassr) <me@wassr.cc>                      )
+(                                                                           )
+( Licensed under the Apache License, Version 2.0 (the "License");           )
+( you may not use this file except in compliance with the License.          )
+( You may obtain a copy of the License at                                   )
+(                                                                           )
+(     http://www.apache.org/licenses/LICENSE-2.0                            )
+(                                                                           )
+( Unless required by applicable law or agreed to in writing, software       )
+( distributed under the License is distributed on an "AS IS" BASIS,         )
+( WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  )
+( See the License for the specific language governing permissions and       )
+( limitations under the License.                                            )
+
+( 32-bit integers use two 16-bit words, high word first. )
+( Shift counts and flags are bytes. Addresses are 16-bit words. )
+( Arithmetic wraps to 32 bits. Multiplication and division use scratch RAM. )
+
+@int32/add ( ah al bh bl -- ch cl | c = a + b )
+    STH2 SWP2 STH2r ( ah bh al bl )
+    ADD2k ROT2 ( ah bh bl sum al )
+    LTH2k STH POP2 NIP2 ( ah bh sum [carry] )
+    ROT2 ROT2 ADD2 #00 STHr ADD2 SWP2 JMP2r
+
+@int32/sub ( ah al bh bl -- ch cl | c = a - b )
+    STH2 SWP2 STH2r ( ah bh al bl )
+    LTH2k STH SUB2 ( ah bh diff [borrow] )
+    ROT2 ROT2 SUB2 #00 STHr SUB2 SWP2 JMP2r
+
+@int32/neg ( ah al -- ch cl | c = -a )
+@int32-neg
+    int32/not INC2
+    DUP2 ORA ?&done
+    SWP2 INC2 SWP2
+    &done JMP2r
+
+@int32/mul ( ah al bh bl -- ch cl | c = a * b )
+@int32-mul
+    ;&multiplier int32/store ;&multiplicand int32/store
+    #0000 #0000 ( product )
+    &loop
+        ;&multiplier int32/load
+        OVR2 OVR2 int32/is-zero ?&done
+        DUP2 #0001 AND2 ORA STH
+        int32-rsh-one ;&multiplier int32/store
+        STHr #00 EQU ?&next
+        ;&multiplicand int32/load int32/add
+        &next
+        ;&multiplicand int32/load int32-lsh-one ;&multiplicand int32/store
+        !&loop
+    &done POP2 POP2 JMP2r
+    &multiplier $4 &multiplicand $4
+
+@int32/udiv ( ah al bh bl -- qh ql | unsigned quotient )
+    int32/udivmod POP2 POP2 JMP2r
+
+@int32/sdiv ( ah al bh bl -- qh ql | signed quotient )
+    int32/sdivmod POP2 POP2 JMP2r
+
+@int32/umod ( ah al bh bl -- rh rl | unsigned remainder )
+    int32/udivmod ROT2 POP2 ROT2 POP2 JMP2r
+
+@int32/smod ( ah al bh bl -- rh rl | signed remainder )
+    int32/sdivmod ROT2 POP2 ROT2 POP2 JMP2r
+
+( A zero divisor returns quotient 0 and the original dividend as remainder. )
+@int32/udivmod ( ah al bh bl -- qh ql rh rl | unsigned quotient and remainder )
+@int32-udivmod
+    OVR2 OVR2 int32/is-zero ?&zero-divisor
+    ;&divisor int32/store ;&quotient int32/store
+    #0000 #0000 ;&remainder int32/store
+    #20
+    &loop
+        STH
+        ( Move the next dividend bit into the remainder. )
+        ;&quotient int32/load OVR2 #0f SFT2 STH2
+        int32-lsh-one ;&quotient int32/store
+        ;&remainder int32/load int32-lsh-one STH2r ORA2
+        ( Subtract when the divisor fits and set the new quotient bit. )
+        OVR2 OVR2 ;&divisor int32/load int32/ult ?&save-remainder
+        ;&divisor int32/load int32/sub
+        ;&quotient INC2 INC2 LDA2k INC2 SWP2 STA2
+        &save-remainder
+        ;&remainder int32/store
+        STHr #01 SUB DUP ?&loop
+    POP ;&quotient int32/load ;&remainder int32/load JMP2r
+    &zero-divisor POP2 POP2 #0000 #0000 ROT2 STH2 ROT2 STH2r JMP2r
+    &divisor $4 &quotient $4 &remainder $4
+
+( Truncates toward zero. A nonzero remainder takes the dividend's sign. )
+( INT32_MIN / -1 wraps to INT32_MIN with remainder 0. )
+@int32/sdivmod ( ah al bh bl -- qh ql rh rl | signed quotient and remainder )
+    int32-magnitude STH2 STH2 STH2
+    int32-magnitude STH2r STH2r STH2r ( | a-magnitude a-sign b-magnitude b-sign )
+    STH2 ROT2 STH2 ( | a-magnitude b-magnitude [b-sign a-sign] )
+    int32/udivmod
+    STH2r DUP2 STH2r EOR2 ORA STH ( | quotient remainder a-sign [a-sign xor b-sign] )
+    ORA int32-neg-if
+    ROT2 STH2 ROT2 STH2r STHr int32-neg-if
+    ROT2 STH2 ROT2 STH2r JMP2r
+
+@int32/eq ( ah al bh bl -- flag | a = b )
+    STH2 SWP2 STH2r EQU2 STH EQU2 STHr AND JMP2r
+
+@int32/is-zero ( ah al -- flag | a = 0 )
+    ORA2 #0000 EQU2 JMP2r
+
+@int32/ult ( ah al bh bl -- flag | unsigned a < b )
+    STH2 SWP2 STH2r LTH2 STH !int32-compare-high
+
+@int32/slt ( ah al bh bl -- flag | signed a < b )
+    STH2 SWP2 STH2r LTH2 STH
+    #8000 EOR2 SWP2 #8000 EOR2 SWP2
+    ( fall through )
+
+@int32-compare-high ( ah bh [lo-flag] -- flag )
+    EQU2k ?&same
+    LTH2 POPr JMP2r
+    &same POP2 POP2 STHr JMP2r
+
+@int32/and ( ah al bh bl -- ch cl )
+    STH2 SWP2 STH2r AND2 STH2 AND2 STH2r JMP2r
+
+@int32/or ( ah al bh bl -- ch cl )
+    STH2 SWP2 STH2r ORA2 STH2 ORA2 STH2r JMP2r
+
+@int32/xor ( ah al bh bl -- ch cl )
+    STH2 SWP2 STH2r EOR2 STH2 EOR2 STH2r JMP2r
+
+@int32/not ( ah al -- ch cl | bitwise complement )
+    #ffff EOR2 SWP2 #ffff EOR2 SWP2 JMP2r
+
+@int32/lsh ( ah al n -- ch cl | c = a << n )
+@int32-lsh
+    DUP #20 LTH ?&loop
+    !int32-zero-shift
+    &loop
+        DUP ?&shift
+        POP JMP2r
+    &shift #01 SUB STH int32-lsh-one STHr !&loop
+
+@int32/ursh ( ah al n -- ch cl | zero-fill right shift )
+@int32-ursh
+    DUP #20 LTH ?&loop
+    !int32-zero-shift
+    &loop
+        DUP ?&shift
+        POP JMP2r
+    &shift #01 SUB STH int32-rsh-one STHr !&loop
+
+@int32/srsh ( ah al n -- ch cl | sign-extending right shift )
+@int32-srsh
+    STH OVR2 #8000 AND2 ORA ?&negative
+    STHr !int32/ursh
+    &negative
+        ( Complement before and after the logical shift to fill with ones. )
+        int32/not STHr int32/ursh !int32/not
+
+@int32/ufrom16 ( a -- ch cl | zero-extend a )
+    #0000 SWP2 JMP2r
+
+@int32/sfrom16 ( a -- ch cl | sign-extend a )
+    DUP2 #0f SFT2 #0000 SWP2 SUB2 SWP2 JMP2r
+
+@int32/load ( addr -- ah al | load a big-endian value )
+    LDA2k SWP2 INC2 INC2 LDA2 JMP2r
+
+@int32/store ( ah al addr -- | store a big-endian value )
+    STH2 STH2kr INC2 INC2 STA2 STH2r STA2 JMP2r
+
+@int32-lsh-one ( ah al -- ch cl )
+    DUP2 #0f SFT2 STH2 #10 SFT2
+    SWP2 #10 SFT2 STH2r ORA2 SWP2 JMP2r
+
+@int32-rsh-one ( ah al -- ch cl )
+    OVR2 #f0 SFT2 STH2 #01 SFT2 STH2r ORA2
+    SWP2 #01 SFT2 SWP2 JMP2r
+
+@int32-zero-shift ( ah al n -- zero zero )
+    POP POP2 POP2 #0000 #0000 JMP2r
+
+@int32-magnitude ( ah al -- magnitude-hi magnitude-lo sign-word )
+    OVR2 #0f SFT2 DUP2 ORA ?&negative
+    JMP2r
+    &negative STH2 int32/neg STH2r JMP2r
+
+@int32-neg-if ( ah al flag -- ch cl )
+    ?int32/neg JMP2r

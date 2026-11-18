@@ -1,0 +1,114 @@
+|0f @system-state
+|18 @console-write
+
+%expect32 { int32/eq test-result }
+%expect8 { EQU test-result }
+
+|0100
+@on-reset
+    ( Addition, subtraction and negation )
+    #0000 #ffff #0000 #0001 int32/add #0001 #0000 expect32
+    #ffff #ffff #0000 #0001 int32/add #0000 #0000 expect32
+    #7fff #ffff #0000 #0001 int32/add #8000 #0000 expect32
+    #0001 #0000 #0000 #0001 int32/sub #0000 #ffff expect32
+    #0000 #0000 #0000 #0001 int32/sub #ffff #ffff expect32
+    #0000 #0000 #0001 #0000 int32/sub #ffff #0000 expect32
+    #0000 #0000 int32/neg #0000 #0000 expect32
+    #0001 #0000 int32/neg #ffff #0000 expect32
+    #8000 #0000 int32/neg #8000 #0000 expect32
+
+    ( Multiplication )
+    #0000 #ffff #0000 #ffff int32/mul #fffe #0001 expect32
+    #0001 #0001 #0001 #0001 int32/mul #0002 #0001 expect32
+    #ffff #fffe #0000 #0003 int32/mul #ffff #fffa expect32
+    #1234 #5678 #0000 #0000 int32/mul #0000 #0000 expect32
+    #0000 #0001 #8000 #0000 int32/mul #8000 #0000 expect32
+
+    ( Division and remainder )
+    #ffff #ffff #0000 #0002 int32/udiv #7fff #ffff expect32
+    #ffff #ffff #0000 #0002 int32/umod #0000 #0001 expect32
+    #ffff #ffff #8000 #0000 int32/udivmod
+    #0000 #0001 #7fff #ffff expect-divmod
+    #0000 #0005 #0001 #0000 int32/udivmod
+    #0000 #0000 #0000 #0005 expect-divmod
+    #1234 #5678 #0000 #0000 int32/udivmod
+    #0000 #0000 #1234 #5678 expect-divmod
+    #ffff #fff9 #0000 #0003 int32/sdiv #ffff #fffe expect32
+    #ffff #fff9 #0000 #0003 int32/smod #ffff #ffff expect32
+    #0000 #0007 #ffff #fffd int32/sdivmod
+    #ffff #fffe #0000 #0001 expect-divmod
+    #ffff #fff9 #ffff #fffd int32/sdivmod
+    #0000 #0002 #ffff #ffff expect-divmod
+    #8000 #0000 #ffff #ffff int32/sdivmod
+    #8000 #0000 #0000 #0000 expect-divmod
+    #8000 #0000 #0000 #0001 int32/sdivmod
+    #8000 #0000 #0000 #0000 expect-divmod
+    #ffff #fff9 #0000 #0000 int32/sdivmod
+    #0000 #0000 #ffff #fff9 expect-divmod
+
+    ( Comparisons )
+    #abcd #1234 #abcd #1234 int32/eq #01 expect8
+    #abcd #1234 #abcd #1235 int32/eq #00 expect8
+    #abcd #1234 #abce #1234 int32/eq #00 expect8
+    #0000 #0000 int32/is-zero #01 expect8
+    #0001 #0000 int32/is-zero #00 expect8
+    #0000 #0001 int32/is-zero #00 expect8
+    #0000 #ffff #0001 #0000 int32/ult #01 expect8
+    #8000 #0000 #7fff #ffff int32/ult #00 expect8
+    #8000 #0000 #7fff #ffff int32/slt #01 expect8
+    #7fff #ffff #8000 #0000 int32/slt #00 expect8
+    #ffff #fffe #ffff #ffff int32/slt #01 expect8
+    #ffff #ffff #ffff #ffff int32/slt #00 expect8
+
+    ( Bitwise operations and shifts )
+    #1234 #5678 #ffff #0000 int32/and #1234 #0000 expect32
+    #1234 #5678 #f000 #000f int32/or #f234 #567f expect32
+    #1234 #5678 #ffff #0000 int32/xor #edcb #5678 expect32
+    #1234 #5678 int32/not #edcb #a987 expect32
+    #1234 #5678 #00 int32/lsh #1234 #5678 expect32
+    #0000 #8000 #01 int32/lsh #0001 #0000 expect32
+    #1234 #5678 #10 int32/lsh #5678 #0000 expect32
+    #0000 #0001 #1f int32/lsh #8000 #0000 expect32
+    #ffff #ffff #20 int32/lsh #0000 #0000 expect32
+    #1234 #5678 #00 int32/ursh #1234 #5678 expect32
+    #0001 #0000 #01 int32/ursh #0000 #8000 expect32
+    #8000 #5678 #10 int32/ursh #0000 #8000 expect32
+    #8000 #0000 #1f int32/ursh #0000 #0001 expect32
+    #ffff #ffff #ff int32/ursh #0000 #0000 expect32
+    #8000 #0001 #00 int32/srsh #8000 #0001 expect32
+    #8001 #0000 #01 int32/srsh #c000 #8000 expect32
+    #8000 #5678 #10 int32/srsh #ffff #8000 expect32
+    #8000 #0000 #1f int32/srsh #ffff #ffff expect32
+    #8000 #0000 #20 int32/srsh #ffff #ffff expect32
+    #7fff #ffff #20 int32/srsh #0000 #0000 expect32
+
+    ( Conversions and big-endian memory layout )
+    #8000 int32/ufrom16 #0000 #8000 expect32
+    #7fff int32/sfrom16 #0000 #7fff expect32
+    #8000 int32/sfrom16 #ffff #8000 expect32
+    ;value int32/load #1234 #5678 expect32
+    #abcd #ef01 ;value int32/store
+    ;value LDA2 ;value INC2 INC2 LDA2 #abcd #ef01 expect32
+
+    ;failed LDA #80 ORA .system-state DEO BRK
+
+@expect-divmod ( qh ql rh rl expected-qh expected-ql expected-rh expected-rl -- )
+    STH2 STH2 ROT2 STH2 ROT2 STH2r
+    STH2r STH2r int32/eq STH int32/eq STHr AND test-result JMP2r
+
+@test-result ( flag -- )
+    ?&ok
+    #01 ;failed STA
+    ;&fail !&print
+    &ok ;&pass
+    &print
+        LDAk DUP ?&emit
+        POP POP2 JMP2r
+    &emit .console-write DEO INC2 !&print
+    &pass "OK 0a 00
+    &fail "FAIL 0a 00
+
+@failed 00
+@value 1234 5678
+
+~lib/int32.tal
