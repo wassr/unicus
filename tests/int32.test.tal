@@ -23,6 +23,8 @@
     #ffff #fffe #0000 #0003 int32/mul #ffff #fffa expect32
     #1234 #5678 #0000 #0000 int32/mul #0000 #0000 expect32
     #0000 #0001 #8000 #0000 int32/mul #8000 #0000 expect32
+    #ffff #ffff #ffff #ffff int32/mul #0000 #0001 expect32
+    #1234 #5678 #89ab #cdef int32/mul #e242 #d208 expect32
 
     ( Division and remainder )
     #ffff #ffff #0000 #0002 int32/udiv #7fff #ffff expect32
@@ -31,6 +33,16 @@
     #0000 #0001 #7fff #ffff expect-divmod
     #0000 #0005 #0001 #0000 int32/udivmod
     #0000 #0000 #0000 #0005 expect-divmod
+    #0000 #ffff #0000 #0100 int32/udivmod
+    #0000 #00ff #0000 #00ff expect-divmod
+    #0000 #ffff #0000 #ffff int32/udivmod
+    #0000 #0001 #0000 #0000 expect-divmod
+    #ffff #ffff #0000 #0001 int32/udivmod
+    #ffff #ffff #0000 #0000 expect-divmod
+    #ffff #ffff #0001 #0000 int32/udivmod
+    #0000 #ffff #0000 #ffff expect-divmod
+    #7fff #ffff #8000 #0000 int32/udivmod
+    #0000 #0000 #7fff #ffff expect-divmod
     #1234 #5678 #0000 #0000 int32/udivmod
     #0000 #0000 #1234 #5678 expect-divmod
     #ffff #fff9 #0000 #0003 int32/sdiv #ffff #fffe expect32
@@ -67,17 +79,23 @@
     #1234 #5678 int32/not #edcb #a987 expect32
     #1234 #5678 #00 int32/lsh #1234 #5678 expect32
     #0000 #8000 #01 int32/lsh #0001 #0000 expect32
+    #89ab #cdef #0f int32/lsh #e6f7 #8000 expect32
     #1234 #5678 #10 int32/lsh #5678 #0000 expect32
+    #89ab #cdef #11 int32/lsh #9bde #0000 expect32
     #0000 #0001 #1f int32/lsh #8000 #0000 expect32
     #ffff #ffff #20 int32/lsh #0000 #0000 expect32
     #1234 #5678 #00 int32/ursh #1234 #5678 expect32
     #0001 #0000 #01 int32/ursh #0000 #8000 expect32
+    #89ab #cdef #0f int32/ursh #0001 #1357 expect32
     #8000 #5678 #10 int32/ursh #0000 #8000 expect32
+    #89ab #cdef #11 int32/ursh #0000 #44d5 expect32
     #8000 #0000 #1f int32/ursh #0000 #0001 expect32
     #ffff #ffff #ff int32/ursh #0000 #0000 expect32
     #8000 #0001 #00 int32/srsh #8000 #0001 expect32
     #8001 #0000 #01 int32/srsh #c000 #8000 expect32
+    #89ab #cdef #0f int32/srsh #ffff #1357 expect32
     #8000 #5678 #10 int32/srsh #ffff #8000 expect32
+    #89ab #cdef #11 int32/srsh #ffff #c4d5 expect32
     #8000 #0000 #1f int32/srsh #ffff #ffff expect32
     #8000 #0000 #20 int32/srsh #ffff #ffff expect32
     #7fff #ffff #20 int32/srsh #0000 #0000 expect32

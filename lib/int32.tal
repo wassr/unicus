@@ -36,20 +36,20 @@
 
 @int32/mul ( ah al bh bl -- ch cl | c = a * b )
 @int32-mul
-    ;&multiplier int32/store ;&multiplicand int32/store
-    #0000 #0000 ( product )
-    &loop
-        ;&multiplier int32/load
-        OVR2 OVR2 int32/is-zero ?&done
-        DUP2 #0001 AND2 ORA STH
-        int32-rsh-one ;&multiplier int32/store
-        STHr #00 EQU ?&next
-        ;&multiplicand int32/load int32/add
-        &next
-        ;&multiplicand int32/load int32-lsh-one ;&multiplicand int32/store
-        !&loop
-    &done POP2 POP2 JMP2r
-    &multiplier $4 &multiplicand $4
+    ,&b-mid STR2 ,&b-high STR2 ,&a-mid STR2 ,&a-high STR2
+    ( Cross products contribute only to the high word of the result. )
+    ,&a-high LDR2 ,&b-mid LDR2 MUL2
+    ,&b-high LDR2 ,&a-mid LDR2 MUL2 ADD2 STH2
+    ( Multiply the low words as four byte products, carrying between bytes. )
+    #00 ,&a-low LDR #00 ,&b-low LDR MUL2 STH #00 SWP
+    #00 ,&a-mid LDR #00 ,&b-low LDR MUL2 ADD2
+    DUP2 POP STH NIP #00 SWP
+    #00 ,&a-low LDR #00 ,&b-mid LDR MUL2 ADD2
+    SWP STH #00 STHr #00 STHr ADD2
+    #00 ,&a-mid LDR #00 ,&b-mid LDR MUL2 ADD2
+    STHr ROT ROT STH2r ADD2 SWP2 JMP2r
+    &a-high $2 &a-mid $1 &a-low $1
+    &b-high $2 &b-mid $1 &b-low $1
 
 @int32/udiv ( ah al bh bl -- qh ql | unsigned quotient )
     int32/udivmod POP2 POP2 JMP2r
@@ -67,9 +67,22 @@
 @int32/udivmod ( ah al bh bl -- qh ql rh rl | unsigned quotient and remainder )
 @int32-udivmod
     OVR2 OVR2 int32/is-zero ?&zero-divisor
-    ;&divisor int32/store ;&quotient int32/store
-    #0000 #0000 ;&remainder int32/store
-    #20
+    ;&divisor int32/store
+    OVR2 OVR2 ;&divisor int32/load int32/ult ?&zero-quotient
+    OVR2 ORA ?&wide-dividend
+    ( Both operands fit in one word after the comparison above. )
+    NIP2 ;&divisor INC2 INC2 LDA2 DIV2k
+    DUP2 STH2 MUL2 SUB2 STH2r #0000 SWP2 ROT2 #0000 SWP2 JMP2r
+    &wide-dividend
+    ;&divisor int32/load int32-divisor-top-bit DUP ?&seed
+    ( The sole nonzero divisor with its top bit at index zero is 1. )
+    POP #0000 #0000 JMP2r
+    &seed
+    ( Seed the remainder with the leading bits that cannot reach the divisor. )
+    STH
+    OVR2 OVR2 #20 STHkr SUB int32/ursh ;&remainder int32/store
+    STHkr int32/lsh ;&quotient int32/store
+    #20 STHr SUB
     &loop
         STH
         ( Move the next dividend bit into the remainder. )
@@ -84,7 +97,8 @@
         ;&remainder int32/store
         STHr #01 SUB DUP ?&loop
     POP ;&quotient int32/load ;&remainder int32/load JMP2r
-    &zero-divisor POP2 POP2 #0000 #0000 ROT2 STH2 ROT2 STH2r JMP2r
+    &zero-divisor POP2 POP2
+    &zero-quotient #0000 #0000 ROT2 STH2 ROT2 STH2r JMP2r
     &divisor $4 &quotient $4 &remainder $4
 
 ( Truncates toward zero. A nonzero remainder takes the dividend's sign. )
@@ -132,21 +146,33 @@
 
 @int32/lsh ( ah al n -- ch cl | c = a << n )
 @int32-lsh
-    DUP #20 LTH ?&loop
+    DUP ?&nonzero POP JMP2r
+    &nonzero
+    DUP #10 LTH ?&subword
+    DUP #20 LTH ?&whole-word
     !int32-zero-shift
-    &loop
-        DUP ?&shift
-        POP JMP2r
-    &shift #01 SUB STH int32-lsh-one STHr !&loop
+    &whole-word
+    #0f AND #40 SFT STH NIP2 STHr SFT2 #0000 JMP2r
+    &subword
+    ( Save the left shift control and extract the bits crossing from low to high. )
+    DUP #40 SFT STH #10 SWP SUB STH
+    DUP2 STHr SFT2
+    SWP2 STHkr SFT2 ROT2 STHr SFT2 ROT2 ORA2 SWP2 JMP2r
 
 @int32/ursh ( ah al n -- ch cl | zero-fill right shift )
 @int32-ursh
-    DUP #20 LTH ?&loop
+    DUP ?&nonzero POP JMP2r
+    &nonzero
+    DUP #10 LTH ?&subword
+    DUP #20 LTH ?&whole-word
     !int32-zero-shift
-    &loop
-        DUP ?&shift
-        POP JMP2r
-    &shift #01 SUB STH int32-rsh-one STHr !&loop
+    &whole-word
+    #0f AND STH POP2 STHr SFT2 #0000 SWP2 JMP2r
+    &subword
+    ( Save the right shift control and extract the bits crossing from high to low. )
+    DUP STH #10 SWP SUB #40 SFT STH
+    OVR2 STHr SFT2
+    SWP2 ROT2 STHkr SFT2 SWP2 STHr SFT2 ROT2 ORA2 JMP2r
 
 @int32/srsh ( ah al n -- ch cl | sign-extending right shift )
 @int32-srsh
@@ -172,9 +198,16 @@
     DUP2 #0f SFT2 STH2 #10 SFT2
     SWP2 #10 SFT2 STH2r ORA2 SWP2 JMP2r
 
-@int32-rsh-one ( ah al -- ch cl )
-    OVR2 #f0 SFT2 STH2 #01 SFT2 STH2r ORA2
-    SWP2 #01 SFT2 SWP2 JMP2r
+@int32-divisor-top-bit ( bh bl -- bit | nonzero divisor )
+    OVR2 ORA ?&high-word
+    NIP2 #00 !&scan
+    &high-word POP2 #10
+    &scan STH
+    ( Reduce the nonzero word to one bit, accumulating the shifts. )
+    DUP2 #00ff GTH2 #30 SFT DUP STH SFT2 ADDr
+    DUP2 #000f GTH2 #20 SFT DUP STH SFT2 ADDr
+    DUP2 #0003 GTH2 #10 SFT DUP STH SFT2 ADDr
+    #0001 GTH2 STH ADDr STHr JMP2r
 
 @int32-zero-shift ( ah al n -- zero zero )
     POP POP2 POP2 #0000 #0000 JMP2r
