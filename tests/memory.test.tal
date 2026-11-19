@@ -1,0 +1,190 @@
+|04 @system-wst
+|05 @system-rst
+|0f @system-state
+|18 @console-write
+
+%expect8 { EQU test-result }
+%expect16 { EQU2 test-result }
+
+|0100
+@on-reset
+    test-copy
+    test-mov
+    test-compare
+    test-search
+    test-search2
+    test-searchv
+    test-set
+    test-page-end
+    .system-wst DEI #00 expect8
+    .system-rst DEI #00 expect8
+    ;failed LDA #80 ORA .system-state DEO BRK
+
+@test-copy
+    ;source ;copy-buffer #0000 memory/copy
+    ;copy-buffer LDA2 #eeee expect16
+
+    ;source ;copy-buffer #0005 memory/copy
+    ;copy-buffer LDA2 #1234 EQU2
+    ;copy-buffer #0002 ADD2 LDA2 #5656 EQU2 AND
+    ;copy-buffer #0004 ADD2 LDA2 #78ee EQU2 AND test-result
+
+    ;source INC2 ;copy-buffer #0004 memory/copy
+    ;copy-buffer LDA2 #3456 EQU2
+    ;copy-buffer #0002 ADD2 LDA2 #5678 EQU2 AND
+    ;copy-buffer #0004 ADD2 LDA2 #78ee EQU2 AND test-result
+
+    ;source ;copy-buffer #0001 memory/copy
+    ;copy-buffer LDA2 #1256 expect16
+    JMP2r
+
+@test-mov
+    ;move-right ;move-right INC2 #0005 memory/mov
+    ;move-right LDA2 #0101 EQU2
+    ;move-right #0002 ADD2 LDA2 #0203 EQU2 AND
+    ;move-right #0004 ADD2 LDA2 #0405 EQU2 AND test-result
+
+    ;move-left INC2 ;move-left #0005 memory/mov
+    ;move-left LDA2 #0203 EQU2
+    ;move-left #0002 ADD2 LDA2 #0405 EQU2 AND
+    ;move-left #0004 ADD2 LDA2 #0606 EQU2 AND test-result
+
+    ;move-even ;move-even #0002 ADD2 #0004 memory/mov
+    ;move-even LDA2 #0102 EQU2
+    ;move-even #0002 ADD2 LDA2 #0102 EQU2 AND
+    ;move-even #0004 ADD2 LDA2 #0304 EQU2 AND test-result
+
+    ;move-even ;move-even #0006 memory/mov
+    ;move-even #0004 ADD2 LDA2 #0304 expect16
+
+    ;source ;move-even #0000 memory/mov
+    ;move-even ;source #0000 memory/mov
+    ;move-even LDA2 #0102 EQU2 ;source LDA2 #1234 EQU2 AND test-result
+
+    ;source ;move-even #0001 memory/mov
+    ;move-even LDA2 #1202 expect16
+    JMP2r
+
+@test-compare
+    ;source ;same #0000 memory/eq #01 expect8
+    ;source ;same #0000 memory/neq #00 expect8
+    ;source ;same #0006 memory/eq #01 expect8
+    ;source ;same #0005 memory/neq #00 expect8
+    ;source ;different #0005 memory/eq #00 expect8
+    ;source ;different #0004 memory/neq #01 expect8
+    ;source ;different-tail #0005 memory/eq #00 expect8
+    ;source ;different-tail #0004 memory/eq #01 expect8
+    ;source INC2 ;source #0001 memory/neq #01 expect8
+    JMP2r
+
+@test-search
+    ;source #0000 #12 memory/search #0000 #00 expect-search
+    ;source #0006 #56 memory/search ;source #0002 ADD2 #01 expect-search
+    ;source #0001 #12 memory/search ;source #01 expect-search
+    ;source #0004 #78 memory/search #0000 #00 expect-search
+    ;source #0005 #78 memory/search ;source #0004 ADD2 #01 expect-search
+    #5a #00 STZ
+    #0000 #0001 #5a memory/search #0000 #01 expect-search
+    JMP2r
+
+@test-search2
+    ;source #0000 #1234 memory/search2 #0000 #00 expect-search
+    ;source #0001 #1234 memory/search2 #0000 #00 expect-search
+    ;source #0002 #1234 memory/search2 ;source #01 expect-search
+    ;source #0006 #3456 memory/search2 #0000 #00 expect-search
+    ;source INC2 #0003 #3456 memory/search2 ;source INC2 #01 expect-search
+    ;source #0005 #789a memory/search2 #0000 #00 expect-search
+    ;source #0006 #789a memory/search2 ;source #0004 ADD2 #01 expect-search
+    ;repeat #0006 #1234 memory/search2 ;repeat #01 expect-search
+    JMP2r
+
+@test-searchv
+    ;source #0006 ;needle #0003 #02 memory/searchv #01 expect8
+    ;source #0006 ;needle #0003 #03 memory/searchv #00 expect8
+    ;source #0004 ;needle #0003 #01 memory/searchv #00 expect8
+    ;source #0003 ;needle #0003 #01 memory/searchv #00 expect8
+    ;source #0006 ;same #0006 #ff memory/searchv #01 expect8
+    ;source #0006 ;needle #0003 #ff memory/searchv #00 expect8
+    ;source #0006 ;needle #0003 #00 memory/searchv #00 expect8
+    ;source #0000 ;needle #0003 #01 memory/searchv #00 expect8
+    ;source #0006 ;needle #0000 #01 memory/searchv #00 expect8
+    ;source #0000 ;needle #0000 #01 memory/searchv #00 expect8
+    ;source #0002 ;needle #0003 #01 memory/searchv #00 expect8
+    ;source #0006 ;source #0001 #01 memory/searchv #01 expect8
+    ;large-buffer #0182 ;needle #0003 #80 memory/searchv #00 expect8
+    ;needle ;large-buffer #0180 ADD2 #0003 memory/copy
+    ;large-buffer #0183 ;needle #0003 #80 memory/searchv #01 expect8
+    JMP2r
+
+@test-set
+    ;fill-buffer #0000 #aa memory/set
+    ;fill-buffer #0000 #1234 memory/set2
+    ;fill-buffer LDA2 #eeee expect16
+
+    ;fill-buffer #0005 #aa memory/set
+    ;fill-buffer LDA2 #aaaa EQU2
+    ;fill-buffer #0002 ADD2 LDA2 #aaaa EQU2 AND
+    ;fill-buffer #0004 ADD2 LDA2 #aaee EQU2 AND test-result
+
+    ;fill-buffer INC2 #0003 #1234 memory/set2
+    ;fill-buffer LDA2 #aa12 EQU2
+    ;fill-buffer #0002 ADD2 LDA2 #3412 EQU2 AND
+    ;fill-buffer #0004 ADD2 LDA2 #aaee EQU2 AND test-result
+
+    ;fill-buffer #0004 #789a memory/set2
+    ;fill-buffer LDA2 #789a EQU2
+    ;fill-buffer #0002 ADD2 LDA2 #789a EQU2 AND test-result
+
+    ;fill-buffer #0001 #bcde memory/set2
+    ;fill-buffer LDA2 #bc9a expect16
+
+    ;large-buffer #0183 #a5 memory/set
+    ;large-buffer #0183 #a5a5 memory/search2 ;large-buffer #01 expect-search
+    ;large-buffer #0182 ADD2 LDA #a5 expect8
+    JMP2r
+
+@test-page-end
+    ;source #fffb #0005 memory/copy
+    #fffb ;source #0005 memory/eq #01 expect8
+    #fffb #0005 #78 memory/search #ffff #01 expect-search
+    #fffc #0004 #5678 memory/search2 #fffe #01 expect-search
+    #fffd #0003 #5656 memory/search2 #fffd #01 expect-search
+    #fffb #fffc #0004 memory/mov
+    #fffc ;source #0004 memory/eq #01 expect8
+    #fffc #fffb #0004 memory/mov
+    #fffb ;source #0004 memory/eq #01 expect8
+    #fffd #0003 #abcd memory/set2
+    #fffd LDA2 #abcd EQU2 #ffff LDA #ab EQU AND test-result
+    #00 LDZ #5a expect8
+    JMP2r
+
+@expect-search ( addr** flag* expected-addr** expected-flag* -- )
+    STH ROT STHr EQU STH EQU2 STHr AND !test-result
+
+@test-result ( flag* -- )
+    ?&ok
+    #01 ;failed STA
+    ;&fail !&print
+    &ok ;&pass
+    &print
+        LDAk DUP ?&emit
+        POP POP2 JMP2r
+    &emit .console-write DEO INC2 !&print
+    &pass "OK 0a 00
+    &fail "FAIL 0a 00
+
+@failed 00
+@source 1234 5656 789a
+@same 1234 5656 789a
+@different 1234 9956 789a
+@different-tail 1234 5656 009a
+@needle 5656 78
+@repeat 1234 1234 1234
+@copy-buffer eeee eeee eeee
+@move-right 0102 0304 0506
+@move-left 0102 0304 0506
+@move-even 0102 0304 0506
+@fill-buffer eeee eeee eeee
+@large-buffer $183
+
+~lib/memory.tal
