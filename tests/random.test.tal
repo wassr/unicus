@@ -1,0 +1,104 @@
+|04 @system-wst
+|05 @system-rst
+|0f @system-state
+|18 @console-write
+
+%expect8 { EQU test-result }
+%expect16 { EQU2 test-result }
+
+|0100
+@on-reset
+    test-jsf16
+    test-jsf16-below
+    test-lfsr16
+    test-lfsr16-below
+    .system-wst DEI #00 expect8
+    .system-rst DEI #00 expect8
+    ;failed LDA #80 ORA .system-state DEO BRK
+
+@test-jsf16
+    #1234 ;jsf-state-a random/jsf16-init
+    ;jsf-state-a LDA2 #573c EQU2
+    ;jsf-state-a #0002 ADD2 LDA2 #42b0 EQU2 AND
+    ;jsf-state-a #0004 ADD2 LDA2 #ec2e EQU2 AND
+    ;jsf-state-a #0006 ADD2 LDA2 #272b EQU2 AND test-result
+
+    #1234 ;jsf-state-b random/jsf16-init
+    ;jsf-state-a random/jsf16-next #bb42 expect16
+    ;jsf-state-a random/jsf16-next #4c20 expect16
+    ;jsf-state-b random/jsf16-next #bb42 expect16
+    ;jsf-state-a random/jsf16-next #9e5b expect16
+    ;jsf-state-b random/jsf16-next #4c20 expect16
+    ;jsf-guard-before LDA #aa EQU
+    ;jsf-guard-after LDA #55 EQU AND test-result
+    JMP2r
+
+@test-jsf16-below
+    ( The first draw is rejected, so the next raw draw is the third one. )
+    #0000 ;jsf-state-a random/jsf16-init
+    #8001 ;jsf-state-a random/jsf16-below #0876 expect16
+    ;jsf-state-a random/jsf16-next #bf17 expect16
+
+    ( A draw equal to the threshold is accepted. )
+    #0000 ;jsf-state-a random/jsf16-init
+    #f361 ;jsf-state-a random/jsf16-below #0c9f expect16
+
+    #1234 ;jsf-state-a random/jsf16-init
+    #0001 ;jsf-state-a random/jsf16-below #0000 expect16
+    #0100 ;jsf-state-a random/jsf16-below #0020 expect16
+
+    #ffff ;jsf-state-a random/jsf16-init
+    #ffff ;jsf-state-a random/jsf16-below #09d1 expect16
+    JMP2r
+
+@test-lfsr16
+    #0001 random/lfsr16-next DUP2 #b400 expect16
+    random/lfsr16-next DUP2 #5a00 expect16
+    random/lfsr16-next #2d00 expect16
+
+    ( Require the first return to seed one to occur after 65535 steps. )
+    #ffff #0001
+    &cycle
+        random/lfsr16-next
+        DUP2 #0001 EQU2 ?&returned
+        SWP2 #0001 SUB2 SWP2
+        OVR2 #0000 NEQ2 ?&cycle
+        POP2 POP2 #00 !test-result
+    &returned
+        POP2 #0001 EQU2 !test-result
+
+@test-lfsr16-below
+    ( State 0001 is rejected. The next accepted state is b400. )
+    #8000 #0002 random/lfsr16-below
+    #33ff EQU2 STH #b400 EQU2 STHr AND test-result
+
+    ( States 0002 and 0001 are rejected for bound six. )
+    #0006 #0004 random/lfsr16-below
+    #0005 EQU2 STH #b400 EQU2 STHr AND test-result
+
+    #0001 #0001 random/lfsr16-below
+    #0000 EQU2 STH #b400 EQU2 STHr AND test-result
+
+    #ffff #97ff random/lfsr16-below
+    #fffe EQU2 STH #ffff EQU2 STHr AND test-result
+    JMP2r
+
+@test-result ( flag* -- )
+    ?&ok
+    #01 ;failed STA
+    ;&fail !&print
+    &ok ;&pass
+    &print
+        LDAk DUP ?&emit
+        POP POP2 JMP2r
+    &emit .console-write DEO INC2 !&print
+    &pass "OK 0a 00
+    &fail "FAIL 0a 00
+
+@failed 00
+@jsf-guard-before aa
+@jsf-state-a $8
+@jsf-guard-after 55
+@jsf-state-b $8
+
+~lib/random.tal

@@ -1,0 +1,79 @@
+( Copyright 2026 Noel Atzwanger (@wassr) <me@wassr.cc>                      )
+(                                                                           )
+( Licensed under the Apache License, Version 2.0 (the "License");           )
+( you may not use this file except in compliance with the License.          )
+( You may obtain a copy of the License at                                   )
+(                                                                           )
+(     http://www.apache.org/licenses/LICENSE-2.0                            )
+(                                                                           )
+( Unless required by applicable law or agreed to in writing, software       )
+( distributed under the License is distributed on an "AS IS" BASIS,         )
+( WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  )
+( See the License for the specific language governing permissions and       )
+( limitations under the License.                                            )
+
+( Random number generator )
+
+( Initialize eight writable bytes at addr from any 16-bit seed. )
+@random/jsf16-init ( seed** addr** -- )
+    STH2
+    #5eed STH2kr STA2
+    DUP2 STH2kr #0002 ADD2 STA2
+    DUP2 STH2kr #0004 ADD2 STA2
+    STH2kr #0006 ADD2 STA2
+    #14
+    &jsf-warm-up
+        STH2kr random/jsf16-next POP2
+        #01 SUB DUP ?&jsf-warm-up
+    POP POP2r JMP2r
+
+( Advance the initialized state at addr and return a 16-bit value. )
+@random/jsf16-next ( addr** -- value** )
+    STH2
+    ( e = a - rotl16(b, 13) )
+    STH2kr LDA2 STH2kr #0002 ADD2 LDA2
+    DUP2 #d0 SFT2 SWP2 #03 SFT2 ORA2 SUB2
+    ( a' = b xor rotl16(c, 8), d' = e + a' )
+    STH2kr #0002 ADD2 LDA2 STH2kr #0004 ADD2 LDA2 SWP EOR2
+    DUP2 STH2kr STA2
+    OVR2 ADD2 SWP2 ( new-d** e** )
+    ( c' = d + e, b' = c + d using the old c and d )
+    STH2kr #0006 ADD2 LDA2 ADD2
+    STH2kr #0004 ADD2 LDA2 STH2kr #0006 ADD2 LDA2 ADD2
+    STH2kr #0002 ADD2 STA2
+    STH2kr #0004 ADD2 STA2
+    DUP2 STH2r #0006 ADD2 STA2 JMP2r
+
+( Advance the initialized state at addr and return an value below bound. )
+( Requires a nonzero bound. )
+@random/jsf16-below ( bound** addr** -- value** )
+    STH2
+    ( The wrapped negative bound gives 65536 mod bound after reduction. )
+    DUP2 #0000 SWP2 SUB2 OVR2 random-umod
+    &jsf-draw ( bound** threshold** -- )
+        STH2kr random/jsf16-next
+        OVR2 LTH2k ?&jsf-reject
+        POP2 NIP2 SWP2 random-umod POP2r JMP2r
+    &jsf-reject
+        POP2 POP2 !&jsf-draw
+
+( Advance a nonzero state. The updated state is also the raw output. )
+@random/lfsr16-next ( state** -- next** )
+    ( Shift right and XOR the feedback mask when the outgoing bit is one. )
+    DUP2 #01 SFT2 SWP2 #0001 AND2 #b400 MUL2 EOR2 JMP2r
+
+( Return the updated state and an unsigned value below bound. )
+( Requires a nonzero state and a nonzero bound. )
+@random/lfsr16-below ( bound** state** -- next** value** )
+    STH2 #ffff OVR2 random-umod STH2r
+    &lfsr-draw ( bound** threshold** state** -- )
+        random/lfsr16-next
+        OVR2 GTH2k ?&lfsr-accept
+        POP2 !&lfsr-draw
+    &lfsr-accept
+        ( Reduce the accepted state minus one. )
+        ( Keep the raw state for the caller. )
+        POP2 NIP2 SWP2 OVR2 #0001 SUB2 SWP2 !random-umod
+
+@random-umod ( value** bound** -- remainder** )
+    DIV2k MUL2 SUB2 JMP2r
