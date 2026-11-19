@@ -1,0 +1,145 @@
+( Copyright 2026 Noel Atzwanger (@wassr) <me@wassr.cc>                      )
+(                                                                           )
+( Licensed under the Apache License, Version 2.0 (the "License");           )
+( you may not use this file except in compliance with the License.          )
+( You may obtain a copy of the License at                                   )
+(                                                                           )
+(     http://www.apache.org/licenses/LICENSE-2.0                            )
+(                                                                           )
+( Unless required by applicable law or agreed to in writing, software       )
+( distributed under the License is distributed on an "AS IS" BASIS,         )
+( WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  )
+( See the License for the specific language governing permissions and       )
+( limitations under the License.                                            )
+
+( Memory utility functions )
+( Lengths are in bytes. Nonempty ranges must fit within the 64 KiB page. )
+( Empty ranges perform no reads or writes to the supplied addresses. )
+
+( move len bytes from a to b. source and destination regions can overlap. )
+@memory/mov ( a** b** len** -- )
+    ROT2 ROT2 ( len** a** b** )
+    EQU2k ?&mov-same
+    LTH2k ?&mov-backward
+    ROT2 !memory/copy
+
+    &mov-backward
+        ROT2 SWP2 OVR2 ADD2 STH2 ( a** len** [b-end**] )
+        DUP #01 AND STH OVR2 ADD2 STHr ?&mov-odd
+    &mov-check ( a** cursor** [dst**] )
+        EQU2k ?&mov-done
+    &mov-pairs
+        #0002 SUB2 LDA2k
+        LIT2r 00 02 SUB2r STH2kr STA2
+        NEQ2k ?&mov-pairs
+    &mov-done
+        POP2 POP2 POP2r JMP2r
+    &mov-odd
+        #0001 SUB2 LDAk
+        LIT2r 00 01 SUB2r STH2kr STA
+        !&mov-check
+    &mov-same
+        POP2 POP2 POP2 JMP2r
+
+( copy len bytes from a to b. source and destination cannot overlap. )
+@memory/copy ( a** b** len** -- )
+    SWP2 STH2 ( a** len** [dst**] )
+    DUP #01 AND STH OVR2 ADD2 SWP2 STHr ?&copy-odd
+    &copy-check ( end** cursor** [dst**] )
+        EQU2k ?&copy-done
+    &copy-pairs
+        LDA2k STH2kr STA2 INC2r INC2r INC2 INC2
+        NEQ2k ?&copy-pairs
+    &copy-done
+        POP2 POP2 POP2r JMP2r
+    &copy-odd
+        LDAk STH2kr STA INC2r INC2 !&copy-check
+
+( f is 1 if the regions have identical bytes, including when len is zero. )
+@memory/eq ( a** b** len** -- f* )
+    memory/neq #00 EQU JMP2r
+
+( f is 1 if any byte differs. Equal regions and len = 0 return f = 0. )
+@memory/neq ( a** b** len** -- f* )
+    SWP2 STH2 ( a** len** [b**] )
+    DUP #01 AND STH OVR2 ADD2 SWP2 STHr ?&neq-odd
+    &neq-check ( end** cursor** [other**] )
+        EQU2k ?&neq-equal
+    &neq-pairs
+        LDA2k LDA2kr STH2r NEQ2 ?&neq-different
+        INC2 INC2 INC2r INC2r NEQ2k ?&neq-pairs
+    &neq-equal
+        POP2 POP2 POP2r #00 JMP2r
+    &neq-different
+        POP2 POP2 POP2r #01 JMP2r
+    &neq-odd
+        LDAk LDAkr STHr NEQ ?&neq-different
+        INC2 INC2r !&neq-check
+
+( search for the first byte c in region a. return its address in i and )
+( 1 in f on success, or 0000 in i and 0 in f on failure. )
+@memory/search ( a** len** c* -- i** f* )
+    STH OVR2 ADD2 SWP2 ( end** cursor** [c*] )
+    EQU2k ?&search-miss
+    &search-loop
+        LDAk STHkr EQU ?&search-hit
+        INC2 NEQ2k ?&search-loop
+    &search-miss
+        POP2 POP2 POPr #0000 #00 JMP2r
+    &search-hit
+        NIP2 POPr #01 JMP2r
+
+( search for the first short c at offsets 0, 2, 4, ... from a. skip any )
+( trailing lone byte. return its address in i and 1 in f on success, or )
+( 0000 in i and 0 in f on failure. )
+@memory/search2 ( a** len** c** -- i** f* )
+    STH2 #fe AND OVR2 ADD2 SWP2 ( end** cursor** [c**] )
+    EQU2k ?&search2-miss
+    &search2-loop
+        LDA2k STH2kr EQU2 ?&search2-hit
+        INC2 INC2 NEQ2k ?&search2-loop
+    &search2-miss
+        POP2 POP2 POP2r #0000 #00 JMP2r
+    &search2-hit
+        NIP2 POP2r #01 JMP2r
+
+( search for the m-byte region b in the l-byte region a. test candidate )
+( offsets 0, s, 2*s, ... relative to a. return 1 if a full match is found. )
+( return 0 if either region is empty, m > l, or s = 0. )
+@memory/searchv ( a** l** b** m** s* -- f* )
+    #00 SWP ROT2 STH2 SWP2 DUP2 STH2 ( a** l** stride** m** [b** m**] )
+    ROT2 SWP2 ( a** stride** l** m** )
+    DUP2 ORA #00 EQU ?&searchv-invalid-length
+    LTH2k ?&searchv-invalid-length
+    SUB2 ROT2 ROT2 ( remaining-offset** candidate** stride** )
+    DUP2 ORA #00 EQU ?&searchv-miss
+
+    &searchv-loop ( remaining-offset** candidate** stride** [b** m**] )
+        OVR2 OVR2r STH2r STH2kr memory/eq ?&searchv-hit
+        ROT2 OVR2 LTH2k ?&searchv-too-far ( candidate** stride** remaining** stride** )
+        SUB2 SWP2 DUP2 STH2 ROT2 ADD2 STH2r
+        !&searchv-loop
+    &searchv-hit
+        POP2 POP2 POP2 POP2r POP2r #01 JMP2r
+    &searchv-invalid-length
+    &searchv-too-far
+        POP2
+    &searchv-miss
+        POP2 POP2 POP2 POP2r POP2r #00 JMP2r
+
+( set each byte in region a to c. )
+@memory/set ( a** len** c* -- )
+    DUP !memory/set2
+
+( set each short in region a to c. uses the upper byte if len is uneven. )
+@memory/set2 ( a** len** c** -- )
+    STH2 DUP #01 AND STH OVR2 ADD2 SWP2 STHr ?&set2-odd
+    &set2-check ( end** cursor** [c**] )
+        EQU2k ?&set2-done
+    &set2-pairs
+        STH2kr OVR2 STA2 INC2 INC2 NEQ2k ?&set2-pairs
+    &set2-done
+        POP2 POP2 POP2r JMP2r
+    &set2-odd
+        ( write the trailing byte, then stop the pair loop at its address. )
+        SWP2 #0001 SUB2 DUP2 STH2kr POP ROT ROT STA SWP2 !&set2-check
