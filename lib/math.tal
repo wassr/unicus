@@ -1,0 +1,284 @@
+( Copyright 2026 Noel Atzwanger (@wassr) <me@wassr.cc>                      )
+(                                                                           )
+( Licensed under the Apache License, Version 2.0 (the "License");           )
+( you may not use this file except in compliance with the License.          )
+( You may obtain a copy of the License at                                   )
+(                                                                           )
+(     http://www.apache.org/licenses/LICENSE-2.0                            )
+(                                                                           )
+( Unless required by applicable law or agreed to in writing, software       )
+( distributed under the License is distributed on an "AS IS" BASIS,         )
+( WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  )
+( See the License for the specific language governing permissions and       )
+( limitations under the License.                                            )
+
+( 8-bit and 16-bit integer math )
+( In stack effects, ** marks a 16-bit word. Counts and flags are bytes. )
+( Signed values use two's complement. )
+
+( Division and remainder )
+( A zero divisor returns quotient 0 and the original dividend as remainder. )
+( Signed division truncates toward zero. The remainder follows the dividend's sign. )
+( The minimum signed value divided by -1 wraps with remainder 0. )
+@math/udiv8 ( a b -- q )
+    DIV JMP2r
+
+@math/sdiv8 ( a b -- q )
+    math/sdivmod8 POP JMP2r
+
+@math/umod8 ( a b -- r )
+    DIVk MUL SUB JMP2r
+
+@math/smod8 ( a b -- r )
+    math/sdivmod8 NIP JMP2r
+
+@math/udivmod8 ( a b -- q r )
+    DIVk DUP STH MUL SUB STHr SWP JMP2r
+
+@math/sdivmod8 ( a b -- q r )
+    OVR #07 SFT STH
+    DUP #07 SFT STH
+    math/abs8 SWP math/abs8 SWP math/udivmod8
+    ( Use the dividend sign for r and the XOR of both signs for q. )
+    STHr STHr DUP ROT EOR STH math-neg-if8
+    SWP STHr math-neg-if8 SWP JMP2r
+
+@math/udiv16 ( a** b** -- q** )
+    DIV2 JMP2r
+
+@math/sdiv16 ( a** b** -- q** )
+    math/sdivmod16 POP2 JMP2r
+
+@math/umod16 ( a** b** -- r** )
+    DIV2k MUL2 SUB2 JMP2r
+
+@math/smod16 ( a** b** -- r** )
+    math/sdivmod16 NIP2 JMP2r
+
+@math/udivmod16 ( a** b** -- q** r** )
+    DIV2k DUP2 STH2 MUL2 SUB2 STH2r SWP2 JMP2r
+
+@math/sdivmod16 ( a** b** -- q** r** )
+    OVR2 #0f SFT2 NIP STH
+    DUP2 #0f SFT2 NIP STH
+    math/abs16 SWP2 math/abs16 SWP2 math/udivmod16
+    ( Use the dividend sign for r and the XOR of both signs for q. )
+    STHr STHr DUP ROT EOR STH math-neg-if16
+    SWP2 STHr math-neg-if16 SWP2 JMP2r
+
+( Ordering and bounds )
+( Clamp requires lo <= hi under the corresponding signed or unsigned ordering. )
+@math/ult8 ( a b -- flag | unsigned a < b )
+    LTH JMP2r
+
+@math/slt8 ( a b -- flag | signed a < b )
+    #80 EOR SWP #80 EOR GTH JMP2r
+
+@math/ugt8 ( a b -- flag | unsigned a > b )
+    GTH JMP2r
+
+@math/sgt8 ( a b -- flag | signed a > b )
+    SWP !math/slt8
+
+@math/umin8 ( a b -- min )
+    LTHk ?&umin8-take-a NIP JMP2r
+    &umin8-take-a POP JMP2r
+
+@math/smin8 ( a b -- min )
+    SWPk math/slt8 ?&smin8-take-b POP JMP2r
+    &smin8-take-b NIP JMP2r
+
+@math/umax8 ( a b -- max )
+    GTHk ?&umax8-take-a NIP JMP2r
+    &umax8-take-a POP JMP2r
+
+@math/smax8 ( a b -- max )
+    SWPk math/sgt8 ?&smax8-take-b POP JMP2r
+    &smax8-take-b NIP JMP2r
+
+@math/uclamp8 ( x lo hi -- y )
+    STH math/umax8 STHr !math/umin8
+
+@math/sclamp8 ( x lo hi -- y )
+    STH math/smax8 STHr !math/smin8
+
+@math/ult16 ( a** b** -- flag | unsigned a < b )
+    LTH2 JMP2r
+
+@math/slt16 ( a** b** -- flag | signed a < b )
+    #8000 EOR2 SWP2 #8000 EOR2 GTH2 JMP2r
+
+@math/ugt16 ( a** b** -- flag | unsigned a > b )
+    GTH2 JMP2r
+
+@math/sgt16 ( a** b** -- flag | signed a > b )
+    SWP2 !math/slt16
+
+@math/umin16 ( a** b** -- min** )
+    LTH2k ?&umin16-take-a NIP2 JMP2r
+    &umin16-take-a POP2 JMP2r
+
+@math/smin16 ( a** b** -- min** )
+    SWP2k math/slt16 ?&smin16-take-b POP2 JMP2r
+    &smin16-take-b NIP2 JMP2r
+
+@math/umax16 ( a** b** -- max** )
+    GTH2k ?&umax16-take-a NIP2 JMP2r
+    &umax16-take-a POP2 JMP2r
+
+@math/smax16 ( a** b** -- max** )
+    SWP2k math/sgt16 ?&smax16-take-b POP2 JMP2r
+    &smax16-take-b NIP2 JMP2r
+
+@math/uclamp16 ( x** lo** hi** -- y** )
+    STH2 math/umax16 STH2r !math/umin16
+
+@math/sclamp16 ( x** lo** hi** -- y** )
+    STH2 math/smax16 STH2r !math/smin16
+
+( Magnitude, extension, and shifts )
+@math/abs8 ( a -- magnitude | unsigned magnitude of a signed byte )
+    DUP #07 SFT
+    ( fall through )
+@math-neg-if8 ( a flag -- c )
+    ?&negate JMP2r
+    &negate #00 SWP SUB JMP2r
+
+@math/abs16 ( a** -- magnitude** | unsigned magnitude of a signed word )
+    DUP2 #0f SFT2 NIP
+    ( fall through )
+@math-neg-if16 ( a** flag -- c** )
+    ?&negate JMP2r
+    &negate #0000 SWP2 SUB2 JMP2r
+
+@math/ufrom8 ( a -- c** | zero-extend a )
+    #00 SWP JMP2r
+
+@math/sfrom8 ( a -- c** | sign-extend a )
+    DUP #07 SFT #00 SWP SUB SWP JMP2r
+
+( Counts at least as large as the operand width leave only fill bits. )
+@math/ursh8 ( a n -- c | zero-fill right shift )
+    DUP #08 LTH ?&ursh8-shift POP POP #00 JMP2r
+    &ursh8-shift SFT JMP2r
+
+@math/srsh8 ( a n -- c | sign-extending right shift )
+    OVR #80 AND ?&srsh8-negative !math/ursh8
+    &srsh8-negative SWP #ff EOR SWP math/ursh8 #ff EOR JMP2r
+
+@math/ursh16 ( a** n -- c** | zero-fill right shift )
+    DUP #10 LTH ?&ursh16-shift POP POP2 #0000 JMP2r
+    &ursh16-shift SFT2 JMP2r
+
+@math/srsh16 ( a** n -- c** | sign-extending right shift )
+    STH DUP2 POP #80 AND ?&srsh16-negative STHr !math/ursh16
+    &srsh16-negative #ffff EOR2 STHr math/ursh16 #ffff EOR2 JMP2r
+
+( Integer square root )
+@math/isqrt8 ( n -- root | floor square root of unsigned n )
+    math/ufrom8 math/isqrt16 NIP JMP2r
+
+@math/isqrt16 ( n** -- root** | floor square root of unsigned n )
+    STH2 #0000 #0080
+    ( Try each root bit from high to low. Every candidate square fits in a word. )
+    &isqrt16-bit ( root bit [n] )
+        ORA2k DUP2k MUL2 STH2kr GTH2 ?&isqrt16-reject
+        ROT2 POP2 SWP2 !&isqrt16-next
+    &isqrt16-reject
+        POP2
+    &isqrt16-next
+        #01 SFT2 ORAk ?&isqrt16-bit
+    POP2 POP2r JMP2r
+
+( Powers and full-width products )
+( Exponents are unsigned. Powers wrap to the base width. Any base to power 0 is 1. )
+@math/pow8 ( base exp -- power )
+    #01 ROT ROT
+    &pow8-loop ( power base exp )
+        DUP ?&pow8-step POP2 JMP2r
+    &pow8-step
+        STH STHkr #01 AND ?&pow8-multiply
+    &pow8-square
+        DUP MUL STHr #01 SFT !&pow8-loop
+    &pow8-multiply
+        DUP STH MUL STHr !&pow8-square
+
+@math/pow16 ( base** exp** -- power** )
+    #0001 ROT2 ROT2
+    &pow16-loop ( power base exp )
+        ORAk ?&pow16-step POP2 POP2 JMP2r
+    &pow16-step
+        STH2 STH2kr #0001 AND2 ORA ?&pow16-multiply
+    &pow16-square
+        DUP2 MUL2 STH2r #01 SFT2 !&pow16-loop
+    &pow16-multiply
+        DUP2 STH2 MUL2 STH2r !&pow16-square
+
+( The 32-bit products use two words, high word first, as in int32.tal. )
+@math/umul-wide8 ( a b -- product** )
+    math/ufrom8 STH2 math/ufrom8 STH2r MUL2 JMP2r
+
+@math/smul-wide8 ( a b -- product** )
+    math/sfrom8 STH2 math/sfrom8 STH2r MUL2 JMP2r
+
+( The 16-bit widening products use four bytes of scratch RAM. )
+@math/umul-wide16 ( a** b** -- ph** pl** )
+    ,&umul-wide16-b STR2 ,&umul-wide16-a STR2
+    ( Add the four byte products, keeping the carry between partial sums. )
+    #00 ,&umul-wide16-a-lo LDR #00 ,&umul-wide16-b-lo LDR MUL2 STH #00 SWP
+    #00 ,&umul-wide16-a LDR #00 ,&umul-wide16-b-lo LDR MUL2 ADD2
+    DUP2 POP STH NIP #00 SWP
+    #00 ,&umul-wide16-a-lo LDR #00 ,&umul-wide16-b LDR MUL2 ADD2
+    SWP STH #00 STHr #00 STHr ADD2
+    #00 ,&umul-wide16-a LDR #00 ,&umul-wide16-b LDR MUL2 ADD2
+    STHr ROT ROT SWP2 JMP2r
+    &umul-wide16-a $1 &umul-wide16-a-lo $1 &umul-wide16-b $1 &umul-wide16-b-lo $1
+
+@math/smul-wide16 ( a** b** -- ph** pl** )
+    DUP2 #0f SFT2 NIP STH
+    OVR2 #0f SFT2 NIP STHr EOR STH
+    math/abs16 SWP2 math/abs16 SWP2 math/umul-wide16
+    STHr ?&smul-wide16-negative JMP2r
+    &smul-wide16-negative
+        #ffff EOR2 SWP2 #ffff EOR2 SWP2 INC2 ORAk ?&smul-wide16-done
+        SWP2 INC2 SWP2
+    &smul-wide16-done JMP2r
+
+( Saturating arithmetic clamps the result to the corresponding type's range. )
+@math/uadd-sat8 ( a b -- sum )
+    ADDk DUP STH ROT LTH NIP ?&uadd-sat8-overflow STHr JMP2r
+    &uadd-sat8-overflow POPr #ff JMP2r
+
+@math/sadd-sat8 ( a b -- sum )
+    math/sfrom8 STH2 math/sfrom8 STH2r ADD2 !math-sat8
+
+@math/usub-sat8 ( a b -- difference )
+    LTHk ?&usub-sat8-underflow SUB JMP2r
+    &usub-sat8-underflow POP2 #00 JMP2r
+
+@math/ssub-sat8 ( a b -- difference )
+    math/sfrom8 STH2 math/sfrom8 STH2r SUB2 !math-sat8
+
+@math/uadd-sat16 ( a** b** -- sum** )
+    ADD2k DUP2 STH2 ROT2 LTH2 STH POP2 STHr ?&uadd-sat16-overflow STH2r JMP2r
+    &uadd-sat16-overflow POP2r #ffff JMP2r
+
+@math/sadd-sat16 ( a** b** -- sum** )
+    ADD2k !math-sat16
+
+@math/usub-sat16 ( a** b** -- difference** )
+    LTH2k ?&usub-sat16-underflow SUB2 JMP2r
+    &usub-sat16-underflow POP2 POP2 #0000 JMP2r
+
+@math/ssub-sat16 ( a** b** -- difference** )
+    SUB2k SWP2 #ffff EOR2 SWP2 !math-sat16
+
+@math-sat8 ( a** -- c )
+    #ff80 #007f math/sclamp16 NIP JMP2r
+
+@math-sat16 ( a** b** result** -- c** )
+    ( Overflow occurs when the result sign differs from both input signs.
+      For subtraction the caller complements b for this sign test. )
+    DUP2 STH2 EOR2 SWP2 STH2kr EOR2 AND2
+    POP #80 AND ?&overflow STH2r JMP2r
+    &overflow #8000 STH2r #0f SFT2 SUB2 JMP2r

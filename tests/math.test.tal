@@ -1,0 +1,294 @@
+( Copyright 2026 Noel Atzwanger (@wassr) <me@wassr.cc>                      )
+(                                                                           )
+( Licensed under the Apache License, Version 2.0 (the "License");           )
+( you may not use this file except in compliance with the License.          )
+( You may obtain a copy of the License at                                   )
+(                                                                           )
+(     http://www.apache.org/licenses/LICENSE-2.0                            )
+(                                                                           )
+( Unless required by applicable law or agreed to in writing, software       )
+( distributed under the License is distributed on an "AS IS" BASIS,         )
+( WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  )
+( See the License for the specific language governing permissions and       )
+( limitations under the License.                                            )
+
+|0f @system-state
+|18 @console-write
+
+%expect8 { EQU test-result }
+%expect16 { EQU2 test-result }
+
+|0100
+@on-reset
+    ( 8-bit division and remainder )
+    #ff #02 math/udiv8 #7f expect8
+    #11 #00 math/udiv8 #00 expect8
+    #ff #02 math/umod8 #01 expect8
+    #ff #00 math/umod8 #ff expect8
+    #ff #80 math/udivmod8 #017f expect16
+    #07 #17 math/udivmod8 #0007 expect16
+    #ff #00 math/udivmod8 #00ff expect16
+    #f9 #03 math/sdiv8 #fe expect8
+    #f9 #03 math/smod8 #ff expect8
+    #f9 #03 math/sdivmod8 #feff expect16
+    #07 #fd math/sdivmod8 #fe01 expect16
+    #f9 #fd math/sdivmod8 #02ff expect16
+    #80 #ff math/sdivmod8 #8000 expect16
+    #80 #80 math/sdivmod8 #0100 expect16
+    #07 #80 math/sdivmod8 #0007 expect16
+    #f9 #00 math/sdivmod8 #00f9 expect16
+    #00 #fd math/sdivmod8 #0000 expect16
+
+    ( 8-bit ordering and bounds )
+    #7f #80 math/ult8 #01 expect8
+    #80 #7f math/ult8 #00 expect8
+    #ff #ff math/ult8 #00 expect8
+    #80 #7f math/ugt8 #01 expect8
+    #7f #80 math/ugt8 #00 expect8
+    #ff #ff math/ugt8 #00 expect8
+    #80 #7f math/slt8 #01 expect8
+    #7f #80 math/slt8 #00 expect8
+    #ff #ff math/slt8 #00 expect8
+    #fe #ff math/slt8 #01 expect8
+    #7f #80 math/sgt8 #01 expect8
+    #80 #7f math/sgt8 #00 expect8
+    #ff #ff math/sgt8 #00 expect8
+    #ff #02 math/umin8 #02 expect8
+    #02 #ff math/umin8 #02 expect8
+    #ff #02 math/umax8 #ff expect8
+    #02 #ff math/umax8 #ff expect8
+    #80 #7f math/smin8 #80 expect8
+    #7f #80 math/smin8 #80 expect8
+    #80 #7f math/smax8 #7f expect8
+    #7f #80 math/smax8 #7f expect8
+    #00 #80 #fe math/uclamp8 #80 expect8
+    #80 #80 #fe math/uclamp8 #80 expect8
+    #81 #80 #fe math/uclamp8 #81 expect8
+    #fe #80 #fe math/uclamp8 #fe expect8
+    #ff #80 #fe math/uclamp8 #fe expect8
+    #00 #fe #fe math/uclamp8 #fe expect8
+    #80 #fd #03 math/sclamp8 #fd expect8
+    #fd #fd #03 math/sclamp8 #fd expect8
+    #00 #fd #03 math/sclamp8 #00 expect8
+    #03 #fd #03 math/sclamp8 #03 expect8
+    #7f #fd #03 math/sclamp8 #03 expect8
+    #00 #03 #03 math/sclamp8 #03 expect8
+
+    ( 8-bit magnitude, extension, and shifts )
+    #80 math/abs8 #80 expect8
+    #ff math/abs8 #01 expect8
+    #00 math/abs8 #00 expect8
+    #7f math/abs8 #7f expect8
+    #ff math/ufrom8 #00ff expect16
+    #80 math/sfrom8 #ff80 expect16
+    #7f math/sfrom8 #007f expect16
+    #85 #00 math/ursh8 #85 expect8
+    #85 #01 math/ursh8 #42 expect8
+    #ff #07 math/ursh8 #01 expect8
+    #ff #08 math/ursh8 #00 expect8
+    #ff #ff math/ursh8 #00 expect8
+    #81 #00 math/srsh8 #81 expect8
+    #81 #01 math/srsh8 #c0 expect8
+    #80 #07 math/srsh8 #ff expect8
+    #80 #08 math/srsh8 #ff expect8
+    #ff #ff math/srsh8 #ff expect8
+    #7f #01 math/srsh8 #3f expect8
+    #7f #ff math/srsh8 #00 expect8
+
+    ( 8-bit square root and powers )
+    #00 math/isqrt8 #00 expect8
+    #01 math/isqrt8 #01 expect8
+    #02 math/isqrt8 #01 expect8
+    #0f math/isqrt8 #03 expect8
+    #10 math/isqrt8 #04 expect8
+    #11 math/isqrt8 #04 expect8
+    #e0 math/isqrt8 #0e expect8
+    #e1 math/isqrt8 #0f expect8
+    #ff math/isqrt8 #0f expect8
+    #00 #00 math/pow8 #01 expect8
+    #00 #09 math/pow8 #00 expect8
+    #03 #01 math/pow8 #03 expect8
+    #03 #04 math/pow8 #51 expect8
+    #03 #05 math/pow8 #f3 expect8
+    #fd #ff math/pow8 #55 expect8
+    #02 #08 math/pow8 #00 expect8
+
+    ( 8-bit full-width products )
+    #00 #ff math/umul-wide8 #0000 expect16
+    #ff #ff math/umul-wide8 #fe01 expect16
+    #ff #80 math/umul-wide8 #7f80 expect16
+    #5d #39 math/umul-wide8 #14b5 expect16
+    #ff #ff math/smul-wide8 #0001 expect16
+    #80 #80 math/smul-wide8 #4000 expect16
+    #7f #80 math/smul-wide8 #c080 expect16
+    #80 #02 math/smul-wide8 #ff00 expect16
+    #80 #00 math/smul-wide8 #0000 expect16
+    #00 #ff math/smul-wide8 #0000 expect16
+    #ff #01 math/smul-wide8 #ffff expect16
+
+    ( 8-bit saturating arithmetic )
+    #ff #01 math/uadd-sat8 #ff expect8
+    #01 #ff math/uadd-sat8 #ff expect8
+    #fe #01 math/uadd-sat8 #ff expect8
+    #01 #02 math/uadd-sat8 #03 expect8
+    #ff #01 math/usub-sat8 #fe expect8
+    #00 #ff math/usub-sat8 #00 expect8
+    #0d #0d math/usub-sat8 #00 expect8
+    #7f #01 math/sadd-sat8 #7f expect8
+    #80 #ff math/sadd-sat8 #80 expect8
+    #80 #80 math/sadd-sat8 #80 expect8
+    #02 #03 math/sadd-sat8 #05 expect8
+    #80 #7f math/sadd-sat8 #ff expect8
+    #7f #ff math/ssub-sat8 #7f expect8
+    #80 #01 math/ssub-sat8 #80 expect8
+    #00 #80 math/ssub-sat8 #7f expect8
+    #ff #80 math/ssub-sat8 #7f expect8
+    #80 #80 math/ssub-sat8 #00 expect8
+    #ff #02 math/ssub-sat8 #fd expect8
+    #00 #7f math/ssub-sat8 #81 expect8
+
+    ( 16-bit division and remainder )
+    #ffff #0002 math/udiv16 #7fff expect16
+    #0011 #0000 math/udiv16 #0000 expect16
+    #ffff #0002 math/umod16 #0001 expect16
+    #ffff #0000 math/umod16 #ffff expect16
+    #ffff #8000 math/udivmod16 #0001 #7fff expect32
+    #0007 #0017 math/udivmod16 #0000 #0007 expect32
+    #ffff #0000 math/udivmod16 #0000 #ffff expect32
+    #fff9 #0003 math/sdiv16 #fffe expect16
+    #fff9 #0003 math/smod16 #ffff expect16
+    #fff9 #0003 math/sdivmod16 #fffe #ffff expect32
+    #0007 #fffd math/sdivmod16 #fffe #0001 expect32
+    #fff9 #fffd math/sdivmod16 #0002 #ffff expect32
+    #8000 #ffff math/sdivmod16 #8000 #0000 expect32
+    #8000 #8000 math/sdivmod16 #0001 #0000 expect32
+    #0007 #8000 math/sdivmod16 #0000 #0007 expect32
+    #fff9 #0000 math/sdivmod16 #0000 #fff9 expect32
+    #0000 #fffd math/sdivmod16 #0000 #0000 expect32
+
+    ( 16-bit ordering and bounds )
+    #7fff #8000 math/ult16 #01 expect8
+    #8000 #7fff math/ult16 #00 expect8
+    #ffff #ffff math/ult16 #00 expect8
+    #8000 #7fff math/ugt16 #01 expect8
+    #7fff #8000 math/ugt16 #00 expect8
+    #ffff #ffff math/ugt16 #00 expect8
+    #8000 #7fff math/slt16 #01 expect8
+    #7fff #8000 math/slt16 #00 expect8
+    #ffff #ffff math/slt16 #00 expect8
+    #fffe #ffff math/slt16 #01 expect8
+    #7fff #8000 math/sgt16 #01 expect8
+    #8000 #7fff math/sgt16 #00 expect8
+    #ffff #ffff math/sgt16 #00 expect8
+    #ffff #0002 math/umin16 #0002 expect16
+    #0002 #ffff math/umin16 #0002 expect16
+    #ffff #0002 math/umax16 #ffff expect16
+    #0002 #ffff math/umax16 #ffff expect16
+    #8000 #7fff math/smin16 #8000 expect16
+    #7fff #8000 math/smin16 #8000 expect16
+    #8000 #7fff math/smax16 #7fff expect16
+    #7fff #8000 math/smax16 #7fff expect16
+    #0000 #8000 #fffe math/uclamp16 #8000 expect16
+    #8000 #8000 #fffe math/uclamp16 #8000 expect16
+    #8001 #8000 #fffe math/uclamp16 #8001 expect16
+    #fffe #8000 #fffe math/uclamp16 #fffe expect16
+    #ffff #8000 #fffe math/uclamp16 #fffe expect16
+    #0000 #fffe #fffe math/uclamp16 #fffe expect16
+    #8000 #fffd #0003 math/sclamp16 #fffd expect16
+    #fffd #fffd #0003 math/sclamp16 #fffd expect16
+    #0000 #fffd #0003 math/sclamp16 #0000 expect16
+    #0003 #fffd #0003 math/sclamp16 #0003 expect16
+    #7fff #fffd #0003 math/sclamp16 #0003 expect16
+    #0000 #0003 #0003 math/sclamp16 #0003 expect16
+
+    ( 16-bit magnitude, extension, and shifts )
+    #8000 math/abs16 #8000 expect16
+    #ffff math/abs16 #0001 expect16
+    #0000 math/abs16 #0000 expect16
+    #7fff math/abs16 #7fff expect16
+    #8005 #00 math/ursh16 #8005 expect16
+    #8005 #01 math/ursh16 #4002 expect16
+    #ffff #0f math/ursh16 #0001 expect16
+    #ffff #10 math/ursh16 #0000 expect16
+    #ffff #ff math/ursh16 #0000 expect16
+    #8001 #00 math/srsh16 #8001 expect16
+    #8001 #01 math/srsh16 #c000 expect16
+    #8000 #0f math/srsh16 #ffff expect16
+    #8000 #10 math/srsh16 #ffff expect16
+    #ffff #ff math/srsh16 #ffff expect16
+    #7fff #01 math/srsh16 #3fff expect16
+    #7fff #ff math/srsh16 #0000 expect16
+
+    ( 16-bit square root and powers )
+    #0000 math/isqrt16 #0000 expect16
+    #0001 math/isqrt16 #0001 expect16
+    #0002 math/isqrt16 #0001 expect16
+    #000f math/isqrt16 #0003 expect16
+    #0010 math/isqrt16 #0004 expect16
+    #0011 math/isqrt16 #0004 expect16
+    #fe00 math/isqrt16 #00fe expect16
+    #fe01 math/isqrt16 #00ff expect16
+    #ffff math/isqrt16 #00ff expect16
+    #0000 #0000 math/pow16 #0001 expect16
+    #0000 #0009 math/pow16 #0000 expect16
+    #0003 #0001 math/pow16 #0003 expect16
+    #0003 #0004 math/pow16 #0051 expect16
+    #0003 #0005 math/pow16 #00f3 expect16
+    #fffd #ffff math/pow16 #5555 expect16
+    #0002 #0010 math/pow16 #0000 expect16
+
+    ( 16-bit full-width products )
+    #0000 #ffff math/umul-wide16 #0000 #0000 expect32
+    #ffff #ffff math/umul-wide16 #fffe #0001 expect32
+    #ffff #8000 math/umul-wide16 #7fff #8000 expect32
+    #1234 #abcd math/umul-wide16 #0c37 #4fa4 expect32
+    #ffff #ffff math/smul-wide16 #0000 #0001 expect32
+    #8000 #8000 math/smul-wide16 #4000 #0000 expect32
+    #7fff #8000 math/smul-wide16 #c000 #8000 expect32
+    #8000 #0002 math/smul-wide16 #ffff #0000 expect32
+    #8000 #0000 math/smul-wide16 #0000 #0000 expect32
+    #0000 #ffff math/smul-wide16 #0000 #0000 expect32
+    #ffff #0001 math/smul-wide16 #ffff #ffff expect32
+    #ff00 #0100 math/smul-wide16 #ffff #0000 expect32
+
+    ( 16-bit saturating arithmetic )
+    #ffff #0001 math/uadd-sat16 #ffff expect16
+    #0001 #ffff math/uadd-sat16 #ffff expect16
+    #fffe #0001 math/uadd-sat16 #ffff expect16
+    #0001 #0002 math/uadd-sat16 #0003 expect16
+    #ffff #0001 math/usub-sat16 #fffe expect16
+    #0000 #ffff math/usub-sat16 #0000 expect16
+    #000d #000d math/usub-sat16 #0000 expect16
+    #7fff #0001 math/sadd-sat16 #7fff expect16
+    #8000 #ffff math/sadd-sat16 #8000 expect16
+    #8000 #8000 math/sadd-sat16 #8000 expect16
+    #0002 #0003 math/sadd-sat16 #0005 expect16
+    #8000 #7fff math/sadd-sat16 #ffff expect16
+    #7fff #ffff math/ssub-sat16 #7fff expect16
+    #8000 #0001 math/ssub-sat16 #8000 expect16
+    #0000 #8000 math/ssub-sat16 #7fff expect16
+    #ffff #8000 math/ssub-sat16 #7fff expect16
+    #8000 #8000 math/ssub-sat16 #0000 expect16
+    #ffff #0002 math/ssub-sat16 #fffd expect16
+    #0000 #7fff math/ssub-sat16 #8001 expect16
+
+    ;failed LDA #80 ORA .system-state DEO BRK
+
+@expect32 ( ah** al** bh** bl** -- )
+    ROT2 EQU2 STH EQU2 STHr AND !test-result
+
+@test-result ( flag -- )
+    ?&ok
+    #01 ;failed STA
+    ;&fail !&print
+    &ok ;&pass
+    &print
+        LDAk DUP ?&emit
+        POP POP2 JMP2r
+    &emit .console-write DEO INC2 !&print
+    &pass "OK 0a 00
+    &fail "FAIL 0a 00
+
+@failed 00
+
+~lib/math.tal
