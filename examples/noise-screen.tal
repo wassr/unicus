@@ -1,0 +1,88 @@
+( Copyright 2026 Noel Atzwanger (@wassr) <me@wassr.cc>                      )
+(                                                                           )
+( Licensed under the Apache License, Version 2.0 (the "License");           )
+( you may not use this file except in compliance with the License.          )
+( You may obtain a copy of the License at                                   )
+(                                                                           )
+(     http://www.apache.org/licenses/LICENSE-2.0                            )
+(                                                                           )
+( Unless required by applicable law or agreed to in writing, software       )
+( distributed under the License is distributed on an "AS IS" BASIS,         )
+( WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  )
+( See the License for the specific language governing permissions and       )
+( limitations under the License.                                            )
+
+( Build from the repo root )
+( ./uxn2 drifblim.rom examples/noise-screen.tal out.rom )
+( Run with a decimal seed from 0 to 65535. The default seed is 0. )
+( ./uxn2 out.rom 1234 )
+
+|0100
+@on-reset ( -> )
+    ;width LDA2 .screen/width DEO2
+    ;height LDA2 .screen/height DEO2
+    ( In each RGB channel, color 0 is off and color 1 is full intensity. )
+    #0fff DUP2 DUP2 .system/r DEO2 .system/g DEO2 .system/b DEO2
+    .console/type DEI ?&wait-for-seed
+    #0000 draw-noise BRK
+    &wait-for-seed
+        ;on-argument .console/vector DEO2 BRK
+
+@on-argument ( -> )
+    ( Type 2 is an argument byte. Types 3 and 4 end an argument. )
+    .console/type DEI
+    DUP #02 EQU ?&digit
+    DUP #03 EQU SWP #04 EQU ORA ?&done
+    BRK
+
+    &digit
+        POP .console/read DEI #30 SUB
+        DUP #09 GTH ?&bad-digit
+        ( 65535 = 6553 * 10 + 5. Check before multiplying. )
+        ;seed LDA2 #1999 GTH2k ?&too-large
+        EQU2k STH POP2 ROT
+        DUP #05 GTH STHr AND ?&bad-value
+        STH #000a MUL2 #00 STHr ADD2 ;seed STA2
+        BRK
+
+    &done
+        ( Draw once, after the first argument. )
+        #0000 .console/vector DEO2
+        ;seed LDA2 draw-noise BRK
+
+    &too-large POP2
+    &bad-value POP2
+    &bad-digit POP
+        #0000 .console/vector DEO2
+        ;seed-error
+    &print-error
+        LDAk DUP ?&emit-error
+        POP POP2 #81 .system/state DEO BRK
+    &emit-error .console/error DEO INC2 !&print-error
+
+@draw-noise ( seed** -- )
+    ;rng random/jsf16-init
+    ( Read back the actual dimensions in case the emulator limits resizing. )
+    .screen/height DEI2 #0000
+    &row ( height** y** )
+        DUP2 .screen/y DEO2
+        .screen/width DEI2 #0000
+    &pixel ( height** y** width** x** )
+        DUP2 .screen/x DEO2
+        ( The low bit selects background color 0 (black) or 1 (white). )
+        ;rng random/jsf16-next NIP #01 AND .screen/pixel DEO
+        INC2 GTH2k ?&pixel
+        POP2 POP2
+        INC2 GTH2k ?&row
+    POP2 POP2 JMP2r
+
+( Edit these hexadecimal dimensions to resize the noise image. )
+@width 0400
+@height 0400
+@seed 0000
+@rng $8
+@seed-error "Seed 20 "must 20 "be 20 "a 20 "decimal 20 "integer 20 "from 20 "0 20 "to 20 "65535. 0a 00
+
+( Expand both includes from a macro so Drifblim can read both files. )
+%noise-imports { ~lib/random.tal ~lib/varvara.tal }
+noise-imports
