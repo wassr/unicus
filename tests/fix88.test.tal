@@ -1,0 +1,184 @@
+( Copyright 2026 Noel Atzwanger (@wassr) <me@wassr.cc>                      )
+(                                                                           )
+( Licensed under the Apache License, Version 2.0 (the "License");           )
+( you may not use this file except in compliance with the License.          )
+( You may obtain a copy of the License at                                   )
+(                                                                           )
+(     http://www.apache.org/licenses/LICENSE-2.0                            )
+(                                                                           )
+( Unless required by applicable law or agreed to in writing, software       )
+( distributed under the License is distributed on an "AS IS" BASIS,         )
+( WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  )
+( See the License for the specific language governing permissions and       )
+( limitations under the License.                                            )
+
+|0f @system-state
+|18 @console-write
+
+%expect16 { EQU2 test-result }
+%expect32 { int32/eq test-result }
+
+|0100
+@on-reset
+    ( Integer and ratio conversions )
+    #0000 fix88/from-int #0000 expect16
+    #007f fix88/from-int #7f00 expect16
+    #ff80 fix88/from-int #8000 expect16
+    #0080 fix88/from-int #8000 expect16
+    #0100 fix88/from-int #0000 expect16
+    #0001 #003c fix88/from-ratio #0004 expect16
+    #ffff #0003 fix88/from-ratio #ffab expect16
+    #0001 #fffd fix88/from-ratio #ffab expect16
+    #ffff #fffd fix88/from-ratio #0055 expect16
+    #4000 #8000 fix88/from-ratio #ff80 expect16
+    #8000 #8000 fix88/from-ratio #0100 expect16
+    #7fff #0001 fix88/from-ratio #ff00 expect16
+    #ff80 #0000 fix88/from-ratio #0000 expect16
+
+    ( Rounding to signed integer words )
+    #01ff fix88/trunc #0001 expect16
+    #fe01 fix88/trunc #ffff expect16
+    #fe00 fix88/trunc #fffe expect16
+    #ffff fix88/trunc #0000 expect16
+    #8000 fix88/trunc #ff80 expect16
+    #01ff fix88/floor #0001 expect16
+    #feff fix88/floor #fffe expect16
+    #8000 fix88/floor #ff80 expect16
+    #0100 fix88/ceil #0001 expect16
+    #0101 fix88/ceil #0002 expect16
+    #fe01 fix88/ceil #ffff expect16
+    #fe00 fix88/ceil #fffe expect16
+    #7fff fix88/ceil #0080 expect16
+    #017f fix88/round #0001 expect16
+    #0180 fix88/round #0002 expect16
+    #0181 fix88/round #0002 expect16
+    #fe7f fix88/round #fffe expect16
+    #fe80 fix88/round #fffe expect16
+    #fe81 fix88/round #ffff expect16
+    #8000 fix88/round #ff80 expect16
+    #7fff fix88/round #0080 expect16
+
+    ( Addition, subtraction, negation, and unsigned magnitude )
+    #0180 #ffc0 fix88/add #0140 expect16
+    #7fff #0001 fix88/add #8000 expect16
+    #0180 #ffc0 fix88/sub #01c0 expect16
+    #8000 #0001 fix88/sub #7fff expect16
+    #0180 fix88/neg #fe80 expect16
+    #8000 fix88/neg #8000 expect16
+    #0000 fix88/abs #0000 expect16
+    #0180 fix88/abs #0180 expect16
+    #fe80 fix88/abs #0180 expect16
+    #8000 fix88/abs #8000 expect16
+
+    ( Multiplication and division with truncation and wrapping )
+    #0180 #0180 fix88/mul #0240 expect16
+    #ff80 #0180 fix88/mul #ff40 expect16
+    #ffff #0001 fix88/mul #0000 expect16
+    #ffff #0101 fix88/mul #ffff expect16
+    #8000 #7fff fix88/mul #0080 expect16
+    #8000 #8000 fix88/mul #0000 expect16
+    #0000 #8000 fix88/mul #0000 expect16
+    #0100 #0300 fix88/div #0055 expect16
+    #ff00 #0300 fix88/div #ffab expect16
+    #0100 #fd00 fix88/div #ffab expect16
+    #ff00 #fd00 fix88/div #0055 expect16
+    #0001 #0300 fix88/div #0000 expect16
+    #8000 #0100 fix88/div #8000 expect16
+    #8000 #ff00 fix88/div #8000 expect16
+    #1234 #0000 fix88/div #0000 expect16
+
+    ( Division around the limits for shifting the remainder. )
+    #00ff #1001 fix88/div #000f expect16
+    #0100 #1001 fix88/div #000f expect16
+    #1fff #1000 fix88/div #01ff expect16
+    #2001 #1001 fix88/div #01ff expect16
+    #1000 #efff fix88/div #ff01 expect16
+    #7fff #8000 fix88/div #ff01 expect16
+    #8000 #8000 fix88/div #0100 expect16
+    #8000 #0001 fix88/div #0000 expect16
+
+    ( Saturation at both limits )
+    #ff80 #0180 fix88/mul-sat #ff40 expect16
+    #7fff #0100 fix88/mul-sat #7fff expect16
+    #7fff #0101 fix88/mul-sat #7fff expect16
+    #8000 #0100 fix88/mul-sat #8000 expect16
+    #8000 #0101 fix88/mul-sat #8000 expect16
+    #8000 #ff00 fix88/mul-sat #7fff expect16
+    #8000 #8000 fix88/mul-sat #7fff expect16
+    #0101 #7f80 fix88/mul-sat #7fff expect16
+    #0101 #7f81 fix88/mul #8000 expect16
+    #0101 #7f81 fix88/mul-sat #7fff expect16
+    #feff #7f81 fix88/mul-sat #8000 expect16
+    #0100 #0300 fix88/div-sat #0055 expect16
+    #ff00 #0300 fix88/div-sat #ffab expect16
+    #7fff #0100 fix88/div-sat #7fff expect16
+    #7fff #00ff fix88/div-sat #7fff expect16
+    #8000 #0100 fix88/div-sat #8000 expect16
+    #8001 #00ff fix88/div-sat #8000 expect16
+    #8000 #ff00 fix88/div-sat #7fff expect16
+    #7fff #0001 fix88/div-sat #7fff expect16
+    #8000 #0001 fix88/div-sat #8000 expect16
+    #0000 #0000 fix88/div-sat #0000 expect16
+    #8000 #0000 fix88/div-sat #0000 expect16
+
+    ( Full-precision products and accumulation )
+    #0000 #0000 #0180 #ff80 fix88/mac #ffff #4000 expect32
+    #0000 #ffff #0001 #0001 fix88/mac #0001 #0000 expect32
+    #7fff #ffff #0001 #0001 fix88/mac #8000 #0000 expect32
+    #8000 #0000 #ffff #0001 fix88/mac #7fff #ffff expect32
+    #89ab #cdef #0000 #8000 fix88/mac #89ab #cdef expect32
+    #0000 #0000 #8000 #8000 fix88/mac
+        #8000 #8000 fix88/mac #8000 #0000 expect32
+    #0180 #0180 #00c0 fix88/mul-add #0300 expect16
+    #0001 #0080 #ffff fix88/mul-add #0000 expect16
+    #ffff #0080 #0001 fix88/mul-add #0000 expect16
+    #8000 #ff00 #ff00 fix88/mul-add #7f00 expect16
+    #7fff #0100 #0001 fix88/mul-add #8000 expect16
+
+    ( Clamp, square root, and interpolation )
+    #8000 #fe80 #0180 fix88/clamp #fe80 expect16
+    #fe80 #fe80 #0180 fix88/clamp #fe80 expect16
+    #ffff #fe80 #0180 fix88/clamp #ffff expect16
+    #0180 #fe80 #0180 fix88/clamp #0180 expect16
+    #7fff #fe80 #0180 fix88/clamp #0180 expect16
+    #0000 #ff80 #ff80 fix88/clamp #ff80 expect16
+    #8000 fix88/sqrt #0000 expect16
+    #ffff fix88/sqrt #0000 expect16
+    #0000 fix88/sqrt #0000 expect16
+    #0001 fix88/sqrt #0010 expect16
+    #0002 fix88/sqrt #0016 expect16
+    #00ff fix88/sqrt #00ff expect16
+    #0100 fix88/sqrt #0100 expect16
+    #0200 fix88/sqrt #016a expect16
+    #0240 fix88/sqrt #0180 expect16
+    #3fff fix88/sqrt #07ff expect16
+    #4000 fix88/sqrt #0800 expect16
+    #7fff fix88/sqrt #0b50 expect16
+    #8000 #7fff #0000 fix88/lerp #8000 expect16
+    #8000 #7fff #0100 fix88/lerp #7fff expect16
+    #8000 #7fff #0040 fix88/lerp #c000 expect16
+    #7fff #8000 #0040 fix88/lerp #3fff expect16
+    #8000 #7fff #0080 fix88/lerp #0000 expect16
+    #fffe #0001 #0080 fix88/lerp #0000 expect16
+    #0100 #0400 #0055 fix88/lerp #01ff expect16
+    #ff80 #ff80 #0080 fix88/lerp #ff80 expect16
+
+    ;failed LDA #80 ORA .system-state DEO BRK
+
+@test-result ( flag -- )
+    ?&ok
+    #01 ;failed STA
+    ;&fail !&print
+    &ok ;&pass
+    &print
+        LDAk DUP ?&emit
+        POP POP2 JMP2r
+    &emit .console-write DEO INC2 !&print
+    &pass "OK 0a 00
+    &fail "FAIL 0a 00
+
+@failed 00
+
+~lib/fix88.tal
+~lib/math.tal
+~lib/int32.tal

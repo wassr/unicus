@@ -1,0 +1,157 @@
+( Copyright 2026 Noel Atzwanger (@wassr) <me@wassr.cc>                      )
+(                                                                           )
+( Licensed under the Apache License, Version 2.0 (the "License");           )
+( you may not use this file except in compliance with the License.          )
+( You may obtain a copy of the License at                                   )
+(                                                                           )
+(     http://www.apache.org/licenses/LICENSE-2.0                            )
+(                                                                           )
+( Unless required by applicable law or agreed to in writing, software       )
+( distributed under the License is distributed on an "AS IS" BASIS,         )
+( WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  )
+( See the License for the specific language governing permissions and       )
+( limitations under the License.                                            )
+
+( Signed 8.8 fixed-point math for rendering and simulation. )
+( Each value is a two's-complement word with eight fractional bits. )
+( #0100 is 1. The range is -128 through 127 + 255/256. )
+( In stack effects, ** marks a 16-bit word. )
+( Overflow wraps to the result width unless the operation saturates. )
+( Include math.tal and int32.tal alongside this library. )
+
+@fix88/from-int ( n** -- x** )
+    NIP #00 JMP2r
+
+@fix88/from-ratio ( numerator** denominator** -- x** | truncate toward zero, zero denominator returns zero )
+    !fix88/div
+
+@fix88/trunc ( x** -- n** | round toward zero )
+    OVR #07 SFT OVR #00 NEQ AND STH
+    fix88/floor #00 STHr ADD2 JMP2r
+
+@fix88/floor ( x** -- n** | round down )
+    POP !math/sfrom8
+
+@fix88/ceil ( x** -- n** | round up )
+    DUP #00 NEQ STH fix88/floor #00 STHr ADD2 JMP2r
+
+@fix88/round ( x** -- n** | round to nearest integer, ties away from zero )
+    ( Increment the floor at fraction #80 for positives and #81 for negatives. )
+    OVR #07 SFT #7f ADD OVR LTH STH
+    fix88/floor #00 STHr ADD2 JMP2r
+
+@fix88/add ( a** b** -- sum** )
+    ADD2 JMP2r
+
+@fix88/sub ( a** b** -- difference** )
+    SUB2 JMP2r
+
+@fix88/neg ( x** -- y** )
+    #0000 SWP2 SUB2 JMP2r
+
+@fix88/abs ( x** -- magnitude** | unsigned 8.8 magnitude, including #8000 for -128 )
+    !math/abs16
+
+@fix88/mul ( a** b** -- product** | truncate toward zero )
+    fix88-mul-scaled NIP2 JMP2r
+
+@fix88/div ( a** b** -- quotient** | truncate toward zero, zero divisor returns zero )
+    fix88-div-wide NIP2 JMP2r
+
+@fix88/mul-sat ( a** b** -- product** )
+    fix88-mul-scaled !fix88-sat
+
+@fix88/div-sat ( a** b** -- quotient** | a zero divisor returns zero )
+    fix88-div-wide !fix88-sat
+
+( Multiply and accumulate at full precision. The signed 32-bit accumulator )
+( has 16 fractional bits and uses two words, high word first. )
+@fix88/mac ( acc-hi** acc-lo** a** b** -- sum-hi** sum-lo** )
+    math/smul-wide16 !int32/add
+
+( Compute a * b + c at full precision, then truncate toward zero to 8.8. )
+@fix88/mul-add ( a** b** c** -- sum** )
+    STH2 math/smul-wide16 STH2r fix88-widen int32/add !fix88-narrow
+
+@fix88/clamp ( x** lo** hi** -- y** | requires lo <= hi )
+    !math/sclamp16
+
+@fix88/sqrt ( x** -- root** | rounds down at 8.8 precision, returns zero for x < 0 )
+@fix88-sqrt
+    DUP2 POP #80 AND ?&negative
+    #0000 #0000 ROT2 #0c
+    ( Process pairs from x followed by eight zero bits to root x * 256. )
+    &digit ( root remainder bits count )
+        STH DUP2 #0e SFT2 SWP2 #20 SFT2 STH2
+        SWP2 #20 SFT2 ORA2
+        ( Try appending a one to the root. Its cost is 4 * root + 1. )
+        OVR2 #20 SFT2 INC2 LTH2k ?&reject
+        SUB2 SWP2 #10 SFT2 INC2 SWP2 !&next
+    &reject
+        POP2 SWP2 #10 SFT2 SWP2
+    &next
+        STH2r STHr #01 SUB DUP ?&digit
+    POP POP2 POP2 JMP2r
+    &negative POP2 #0000 JMP2r
+
+( t ranges from #0000 to #0100. The interpolated value truncates toward zero. )
+@fix88/lerp ( a** b** t** -- x** )
+    ( Sum the weighted products before rescaling. )
+    DUP2 STH2 SWP2 STH2 #0100 SWP2 SUB2 math/smul-wide16
+    STH2r STH2r fix88/mac !fix88-narrow
+
+@fix88-widen ( x** -- hi** lo** | sign-extend and shift left by eight bits )
+    SWP math/sfrom8 ROT #00 JMP2r
+
+@fix88-magnitudes ( a** b** -- unsigned-a** unsigned-b** negative )
+    OVR2 OVR2 EOR2 POP #80 AND STH
+    math/abs16 SWP2 math/abs16 SWP2 STHr JMP2r
+
+@fix88-mul-scaled ( a** b** -- ph** pl** )
+    ( Drop the low byte of the magnitude before applying the sign. )
+    fix88-magnitudes STH math/umul-wide16
+    POP ROT #00 SWP SWP2 STHr ?int32/neg JMP2r
+
+@fix88-div-wide ( a** b** -- qh** ql** )
+    ORAk ?&nonzero
+    POP2 POP2 #0000 #0000 JMP2r
+    &nonzero
+        fix88-magnitudes STH
+        DIV2k OVR2 STH2 DUP2 STH2 MUL2 SUB2
+        STH2r STH2r SWP2 STH2 ( remainder divisor [negative whole] )
+        ( A small remainder can be shifted by the full eight bits. )
+        OVR2 #00ff GTH2 ?&larger
+        SWP2 #80 SFT2 SWP2 DIV2 NIP !&pack
+    &larger
+        DUP2 #1000 GTH2 ?&binary
+        ( With divisor <= #1000, each remainder can be shifted by four bits. )
+        SWP2 #40 SFT2 SWP2 DIV2k STH2k OVR2 STH2
+        MUL2 SUB2 #40 SFT2 STH2r DIV2
+        STH2r #40 SFT2 ORA2 NIP !&pack
+    &binary
+        ( The leading one reaches the high byte after eight fractional bits. )
+        LIT2r 0001
+    &bit ( remainder divisor [negative whole fraction] )
+        ( Remainder < divisor <= #8000, so doubling fits in a word. )
+        LITr 10 SFT2r SWP2 #10 SFT2 SWP2
+        LTH2k ?&next
+        SWP2 OVR2 SUB2 SWP2 INC2r
+    &next
+        STH2kr POP #00 EQU ?&bit
+        STH2r NIP STH POP2 POP2 STHr
+    &pack ( fraction [negative whole] )
+        #00 SWP STH2r ROT
+        STHr ?int32/neg JMP2r
+
+@fix88-narrow ( hi** lo** -- x** )
+    ( Dropping the low byte rounds down. Correct negatives with discarded bits. )
+    DUP #00 NEQ STH OVR2 POP #07 SFT STHr AND STH
+    POP ROT POP
+    STHr ?&increment JMP2r
+    &increment INC2 JMP2r
+
+@fix88-sat ( hi** lo** -- x** )
+    ( The value fits if hi is already the sign extension of lo. )
+    DUP2 int32/sfrom16 POP2 ROT2 EQU2k ?&fits
+    NIP2 NIP2 POP #07 SFT #00 SWP #7fff ADD2 JMP2r
+    &fits POP2 POP2 JMP2r
