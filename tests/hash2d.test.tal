@@ -1,0 +1,130 @@
+( Copyright 2026 Noel Atzwanger (@wassr) <me@wassr.cc>                      )
+(                                                                           )
+( Licensed under the Apache License, Version 2.0 (the "License");           )
+( you may not use this file except in compliance with the License.          )
+( You may obtain a copy of the License at                                   )
+(                                                                           )
+(     http://www.apache.org/licenses/LICENSE-2.0                            )
+(                                                                           )
+( Unless required by applicable law or agreed to in writing, software       )
+( distributed under the License is distributed on an "AS IS" BASIS,         )
+( WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  )
+( See the License for the specific language governing permissions and       )
+( limitations under the License.                                            )
+
+|04 @system-wst
+|05 @system-rst
+|0f @system-state
+|18 @console-write
+
+%expect16 { EQU2 test-result }
+%NEXT2 { INC2 INC2 }
+
+|0100
+@on-reset
+    ( Known answers cover high bits, coordinate swaps, and seed extremes. )
+    ;vectors
+    &vector
+        LDAk STH INC2 LDAk STH INC2 LDAk
+        STHr STHr SWP ROT hash2d/word
+        SWP2 INC2 LDA2k ROT2 SWP2 expect16
+        NEXT2 DUP2 ;end-vectors LTH2 ?&vector
+    POP2
+    ( Exhaust every coordinate pair at each representative seed. )
+    #00 permutation test-result
+    #80 permutation test-result
+    #ff permutation test-result
+    ;guard-before LDA #a5 EQU test-result
+    ;guard-after LDA #5a EQU test-result
+    .system-wst DEI #00 EQU test-result
+    .system-rst DEI #00 EQU test-result
+    ;failed LDA #80 ORA .system-state DEO BRK
+
+@permutation ( seed -- flag | marks all 65536 outputs in an 8192-byte bitset )
+    .seed STZ
+    ;seen #2000 ADD2 ;seen
+    &clear #0000 OVR2 STA2 NEXT2 NEQ2k ?&clear
+    POP2 POP2
+    #0000
+    &point ( xy** )
+        DUP2 .seed LDZ hash2d/word
+        DUP #07 AND #40 SFT #01 SWP SFT STH
+        #03 SFT2 ;seen ADD2 LDAk STHkr AND ?&duplicate
+        LDAk STHr ORA ROT ROT STA
+        INC2 DUP2 ORA ?&point
+    POP2 #01 JMP2r
+    &duplicate POP2 POP2 POPr #00 JMP2r
+
+@vectors ( x y seed expected** )
+    00 00 00 1273
+    00 00 01 19ec
+    00 00 7f 3473
+    00 00 80 77dc
+    00 00 ff f1e1
+    00 ff 00 8ab3
+    00 ff 01 84d6
+    00 ff 7f b51e
+    00 ff 80 0fc3
+    00 ff ff 0524
+    ff 00 00 42c7
+    ff 00 01 79f8
+    ff 00 7f 27e7
+    ff 00 80 6084
+    ff 00 ff 5c58
+    ff ff 00 b9b6
+    ff ff 01 e0e0
+    ff ff 7f a74a
+    ff ff 80 a1e7
+    ff ff ff 058b
+    01 80 00 ea65
+    01 80 01 b115
+    01 80 7f 4ee6
+    01 80 80 f4d8
+    01 80 ff 66c7
+    80 01 00 5bae
+    80 01 01 768a
+    80 01 7f 3487
+    80 01 80 390a
+    80 01 ff 1616
+    12 34 00 c039
+    12 34 01 f326
+    12 34 7f 8b6a
+    12 34 80 ee8e
+    12 34 ff 42f2
+    34 12 00 6aaa
+    34 12 01 f592
+    34 12 7f 4e34
+    34 12 80 18bf
+    34 12 ff cdb9
+    7f 80 00 6084
+    7f 80 01 b86e
+    7f 80 7f 5c58
+    7f 80 80 42c7
+    7f 80 ff 27e7
+    80 7f 00 0fc3
+    80 7f 01 f1fa
+    80 7f 7f 0524
+    80 7f 80 8ab3
+    80 7f ff b51e
+@end-vectors
+@guard-before a5
+@seen $2000
+@guard-after 5a
+
+@test-result ( flag -- )
+    ?&ok
+    #01 ;failed STA
+    ;&fail !&print
+    &ok ;&pass
+    &print
+        LDAk DUP ?&emit
+        POP POP2 JMP2r
+    &emit .console-write DEO INC2 !&print
+    &pass "OK 0a 00
+    &fail "FAIL 0a 00
+
+@failed 00
+
+~lib/hash2d.tal
+
+|00 @seed $1

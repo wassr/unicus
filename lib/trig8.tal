@@ -1,0 +1,39 @@
+( Copyright 2026 Noel Atzwanger (@wassr) <me@wassr.cc>                      )
+(                                                                           )
+( Licensed under the Apache License, Version 2.0 (the "License");           )
+( you may not use this file except in compliance with the License.          )
+( You may obtain a copy of the License at                                   )
+(                                                                           )
+(     http://www.apache.org/licenses/LICENSE-2.0                            )
+(                                                                           )
+( Unless required by applicable law or agreed to in writing, software       )
+( distributed under the License is distributed on an "AS IS" BASIS,         )
+( WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  )
+( See the License for the specific language governing permissions and       )
+( limitations under the License.                                            )
+
+( Byte angles wrap at one turn. Results are signed 8.8, rounded to )
+( nearest, including exact +1 and -1. Uses no mutable memory. )
+
+@trig8/cos ( angle -- cosine** )
+    #40 ADD !trig8/sin
+
+@trig8/sin ( angle -- sine** )
+    DUP #80 AND STH
+    #7f AND DUP #40 GTH ?&mirror
+    !&lookup
+    &mirror #80 SWP SUB
+    &lookup #00 SWP #10 SFT2 ;trig8-quarter ADD2 LDA2
+    STHr ?&negative JMP2r
+    &negative #0000 SWP2 SUB2 JMP2r
+
+@trig8-quarter ( round of 256 * sin of pi * i / 128, i from 0 to 64 )
+    0000 0006 000d 0013 0019 001f 0026 002c
+    0032 0038 003e 0044 004a 0050 0056 005c
+    0062 0068 006d 0073 0079 007e 0084 0089
+    008e 0093 0098 009d 00a2 00a7 00ac 00b1
+    00b5 00b9 00be 00c2 00c6 00ca 00ce 00d1
+    00d5 00d8 00dc 00df 00e2 00e5 00e7 00ea
+    00ed 00ef 00f1 00f3 00f5 00f7 00f8 00fa
+    00fb 00fc 00fd 00fe 00ff 00ff 0100 0100
+    0100

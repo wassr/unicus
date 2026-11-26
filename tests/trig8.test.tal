@@ -1,0 +1,87 @@
+( Copyright 2026 Noel Atzwanger (@wassr) <me@wassr.cc>                      )
+(                                                                           )
+( Licensed under the Apache License, Version 2.0 (the "License");           )
+( you may not use this file except in compliance with the License.          )
+( You may obtain a copy of the License at                                   )
+(                                                                           )
+(     http://www.apache.org/licenses/LICENSE-2.0                            )
+(                                                                           )
+( Unless required by applicable law or agreed to in writing, software       )
+( distributed under the License is distributed on an "AS IS" BASIS,         )
+( WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  )
+( See the License for the specific language governing permissions and       )
+( limitations under the License.                                            )
+
+|04 @system-wst
+|05 @system-rst
+|0f @system-state
+|18 @console-write
+
+%expect16 { EQU2 test-result }
+
+|0100
+@on-reset
+    ( Sweep all byte angles, including angle wrap and exact extrema. )
+    #00
+    &angle
+        DUP DUP trig8/sin ROT reference expect16
+        DUP DUP trig8/cos ROT #40 ADD reference expect16
+        INC DUP ?&angle
+    POP
+    .system-wst DEI #00 EQU test-result
+    .system-rst DEI #00 EQU test-result
+    ;failed LDA #80 ORA .system-state DEO BRK
+
+@reference ( angle -- signed-q8** )
+    #00 SWP #10 SFT2 ;sine-reference ADD2 LDA2 JMP2r
+
+( Round 256 * sin(angle * tau / 256) independently for all angles. )
+@sine-reference
+    0000 0006 000d 0013 0019 001f 0026 002c
+    0032 0038 003e 0044 004a 0050 0056 005c
+    0062 0068 006d 0073 0079 007e 0084 0089
+    008e 0093 0098 009d 00a2 00a7 00ac 00b1
+    00b5 00b9 00be 00c2 00c6 00ca 00ce 00d1
+    00d5 00d8 00dc 00df 00e2 00e5 00e7 00ea
+    00ed 00ef 00f1 00f3 00f5 00f7 00f8 00fa
+    00fb 00fc 00fd 00fe 00ff 00ff 0100 0100
+    0100 0100 0100 00ff 00ff 00fe 00fd 00fc
+    00fb 00fa 00f8 00f7 00f5 00f3 00f1 00ef
+    00ed 00ea 00e7 00e5 00e2 00df 00dc 00d8
+    00d5 00d1 00ce 00ca 00c6 00c2 00be 00b9
+    00b5 00b1 00ac 00a7 00a2 009d 0098 0093
+    008e 0089 0084 007e 0079 0073 006d 0068
+    0062 005c 0056 0050 004a 0044 003e 0038
+    0032 002c 0026 001f 0019 0013 000d 0006
+    0000 fffa fff3 ffed ffe7 ffe1 ffda ffd4
+    ffce ffc8 ffc2 ffbc ffb6 ffb0 ffaa ffa4
+    ff9e ff98 ff93 ff8d ff87 ff82 ff7c ff77
+    ff72 ff6d ff68 ff63 ff5e ff59 ff54 ff4f
+    ff4b ff47 ff42 ff3e ff3a ff36 ff32 ff2f
+    ff2b ff28 ff24 ff21 ff1e ff1b ff19 ff16
+    ff13 ff11 ff0f ff0d ff0b ff09 ff08 ff06
+    ff05 ff04 ff03 ff02 ff01 ff01 ff00 ff00
+    ff00 ff00 ff00 ff01 ff01 ff02 ff03 ff04
+    ff05 ff06 ff08 ff09 ff0b ff0d ff0f ff11
+    ff13 ff16 ff19 ff1b ff1e ff21 ff24 ff28
+    ff2b ff2f ff32 ff36 ff3a ff3e ff42 ff47
+    ff4b ff4f ff54 ff59 ff5e ff63 ff68 ff6d
+    ff72 ff77 ff7c ff82 ff87 ff8d ff93 ff98
+    ff9e ffa4 ffaa ffb0 ffb6 ffbc ffc2 ffc8
+    ffce ffd4 ffda ffe1 ffe7 ffed fff3 fffa
+
+@test-result ( flag -- )
+    ?&ok
+    #01 ;failed STA
+    ;&fail !&print
+    &ok ;&pass
+    &print
+        LDAk DUP ?&emit
+        POP POP2 JMP2r
+    &emit .console-write DEO INC2 !&print
+    &pass "OK 0a 00
+    &fail "FAIL 0a 00
+
+@failed 00
+
+~lib/trig8.tal
